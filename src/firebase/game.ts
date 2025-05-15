@@ -11,7 +11,8 @@ import {
   onSnapshot,
   serverTimestamp,
   where,
-  Timestamp 
+  Timestamp,
+  getDocs
 } from 'firebase/firestore';
 import { GameResult, Ticket } from '../types';
 import { getCurrentUser } from './auth';
@@ -51,6 +52,27 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
   try {
     console.log('Guardando resultado en Firebase:', result);
     
+    // Verificar si ya existe un resultado para este mismo instante de tiempo
+    if (result.timestamp) {
+      const date = new Date(result.timestamp);
+      const minuteKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
+      
+      // Verificar si ya existe un resultado para este minuto
+      const existingResultsQuery = query(
+        collection(db, GAME_RESULTS_COLLECTION),
+        where('minuteKey', '==', minuteKey),
+        limit(1)
+      );
+      
+      const existingResults = await getDocs(existingResultsQuery);
+      
+      if (!existingResults.empty) {
+        const existingDoc = existingResults.docs[0];
+        console.log(`Ya existe un resultado para el minuto ${minuteKey} con ID: ${existingDoc.id}. No se guardará otro.`);
+        return existingDoc.id;
+      }
+    }
+    
     // Preparar objetos de ticket para Firestore (evitar errores de serialización)
     const prepareTickets = (tickets: Ticket[]) => {
       return tickets.map(ticket => ({
@@ -77,7 +99,11 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
       firstPrize: prepareTickets(firstPrize),
       secondPrize: prepareTickets(secondPrize),
       thirdPrize: prepareTickets(thirdPrize),
-      freePrize: prepareTickets(freePrize)
+      freePrize: prepareTickets(freePrize),
+      // Añadir la clave del minuto para facilitar la detección de duplicados
+      minuteKey: result.timestamp ? 
+        `${new Date(result.timestamp).getFullYear()}-${new Date(result.timestamp).getMonth()+1}-${new Date(result.timestamp).getDate()}-${new Date(result.timestamp).getHours()}-${new Date(result.timestamp).getMinutes()}` :
+        `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}-${new Date().getHours()}-${new Date().getMinutes()}`
     };
     
     console.log('Datos preparados para Firestore:', resultData);
@@ -149,33 +175,42 @@ export const subscribeToGameResults = (
           });
         }
         
-        // Procesar todos los documentos
-        const results: GameResult[] = [];
-        
+        // Procesar todos los documentos - primero almacenarlos por ID para quitar duplicados explícitos
+        const resultsById = new Map<string, GameResult>();
         snapshot.docs.forEach(doc => {
           try {
             const result = mapFirestoreGameResult(doc);
-            
-            // Obtener clave de minuto para agrupar resultados
-            const date = new Date(result.timestamp);
-            const minuteKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
-            
-            // Solo almacenar un resultado por minuto (el primero que recibimos)
-            if (!resultsByMinute.has(minuteKey)) {
-              resultsByMinute.set(minuteKey, result);
-              results.push(result);
-            }
+            resultsById.set(doc.id, result);
           } catch (error) {
             console.error(`[subscribeToGameResults] Error mapeando documento ${doc.id}:`, error);
           }
         });
+        
+        // Después agrupar por minuto para eliminar duplicados por tiempo
+        const results: GameResult[] = [];
+        
+        resultsById.forEach(result => {
+          // Obtener clave de minuto para agrupar resultados
+          const date = new Date(result.timestamp);
+          const minuteKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
+          
+          // Para duplicados por minuto, quedarnos con el resultado más reciente
+          const existingResult = resultsByMinute.get(minuteKey);
+          
+          if (!existingResult || existingResult.id < result.id) {
+            resultsByMinute.set(minuteKey, result);
+          }
+        });
+        
+        // Convertir el mapa a un array
+        results.push(...resultsByMinute.values());
         
         // Ordenar por timestamp (más reciente primero)
         results.sort((a, b) => b.timestamp - a.timestamp);
         
         // Mostrar un log de diagnóstico
         if (results.length > 0) {
-          console.log(`[subscribeToGameResults] Procesados ${results.length} resultados únicos (por minuto)`);
+          console.log(`[subscribeToGameResults] Procesados ${results.length} resultados únicos (por minuto) de ${resultsById.size} documentos totales`);
         }
         
         callback(results);

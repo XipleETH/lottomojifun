@@ -109,15 +109,30 @@ const processGameDraw = async () => {
     const minuteEnd = new Date(minuteStart);
     minuteEnd.setMinutes(minuteStart.getMinutes() + 1);
     
-    const existingResultsQuery = db.collection(GAME_RESULTS_COLLECTION)
+    // Primero, verificar si ya existe un resultado por minuteKey
+    const existingByKeyQuery = db.collection(GAME_RESULTS_COLLECTION)
       .where('minuteKey', '==', currentMinute)
+      .limit(1);
+    
+    const existingByKey = await existingByKeyQuery.get();
+    
+    if (!existingByKey.empty) {
+      const existingResult = existingByKey.docs[0];
+      logger.info(`[${processId}] Ya existe un resultado para el minuto ${currentMinute} con ID (por minuteKey): ${existingResult.id}`);
+      return { success: true, alreadyProcessed: true, resultId: existingResult.id };
+    }
+    
+    // Verificación adicional por timestamp
+    const existingResultsQuery = db.collection(GAME_RESULTS_COLLECTION)
+      .where('timestamp', '>=', minuteStart)
+      .where('timestamp', '<', minuteEnd)
       .limit(1);
     
     const existingResults = await existingResultsQuery.get();
     
     if (!existingResults.empty) {
       const existingResult = existingResults.docs[0];
-      logger.info(`[${processId}] Ya existe un resultado para el minuto ${currentMinute} con ID: ${existingResult.id}`);
+      logger.info(`[${processId}] Ya existe un resultado para el periodo de tiempo ${currentMinute} con ID: ${existingResult.id}`);
       return { success: true, alreadyProcessed: true, resultId: existingResult.id };
     }
     
@@ -335,6 +350,23 @@ exports.scheduledGameDraw = onSchedule({
   const now = new Date();
   const currentMinute = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
   logger.info(`[${instanceId}] Procesando sorteo para el minuto: ${currentMinute}`);
+  
+  // Comprobar rápidamente si ya existe un resultado para este minuto
+  try {
+    const existingResultQuery = db.collection(GAME_RESULTS_COLLECTION)
+      .where('minuteKey', '==', currentMinute)
+      .limit(1);
+    
+    const existingResult = await existingResultQuery.get();
+    
+    if (!existingResult.empty) {
+      logger.info(`[${instanceId}] Ya existe un resultado para el minuto ${currentMinute}. Abortando ejecución.`);
+      return;
+    }
+  } catch (error) {
+    logger.error(`[${instanceId}] Error verificando existencia de resultados previos:`, error);
+    // Continuamos de todas formas, ya que processGameDraw tiene sus propias verificaciones
+  }
   
   const lockRef = db.collection('scheduler_locks').doc(currentMinute);
   const drawControlRef = db.collection('draw_control').doc(currentMinute);
