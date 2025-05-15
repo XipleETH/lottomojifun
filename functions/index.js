@@ -69,27 +69,51 @@ const checkWin = (ticketNumbers, winningNumbers) => {
 // Función para procesar el sorteo del juego
 exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
   try {
+    logger.info("Solicitud de sorteo recibida");
+    
+    // 1. Verificar si ya se procesó un sorteo para este minuto
+    const now = new Date();
+    const currentMinute = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+    
+    // Verificar en una colección especial para control de sorteos
+    const drawControlRef = db.collection('draw_control').doc(currentMinute);
+    const drawControlDoc = await drawControlRef.get();
+    
+    if (drawControlDoc.exists) {
+      logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute}`);
+      return { 
+        success: true, 
+        resultId: drawControlDoc.data().resultId,
+        alreadyProcessed: true 
+      };
+    }
+    
+    // Marcar este minuto como en proceso para evitar procesamiento duplicado
+    await drawControlRef.set({
+      timestamp: FieldValue.serverTimestamp(),
+      inProgress: true
+    });
+    
     logger.info("Procesando sorteo del juego...");
     
-    // 1. Generar números ganadores
+    // 2. Generar números ganadores
     const winningNumbers = generateRandomEmojis(4);
     logger.info("Números ganadores generados:", winningNumbers);
     
-    // 2. Calcular próximo sorteo
-    const now = new Date();
+    // 3. Calcular próximo sorteo
     const nextMinute = new Date(now);
     nextMinute.setMinutes(now.getMinutes() + 1);
     nextMinute.setSeconds(0);
     nextMinute.setMilliseconds(0);
     
-    // 3. Actualizar estado del juego
+    // 4. Actualizar estado del juego
     await db.collection('game_state').doc(GAME_STATE_DOC).set({
       winningNumbers,
       nextDrawTime: Timestamp.fromDate(nextMinute),
       lastUpdated: FieldValue.serverTimestamp()
     });
     
-    // 4. Obtener tickets activos
+    // 5. Obtener tickets activos
     const ticketsSnapshot = await db.collection(TICKETS_COLLECTION).get();
     const tickets = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -98,7 +122,7 @@ exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
     
     logger.info(`Procesando ${tickets.length} tickets`);
     
-    // 5. Comprobar ganadores
+    // 6. Comprobar ganadores
     const results = {
       firstPrize: [],
       secondPrize: [],
@@ -119,7 +143,7 @@ exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
       thirdPrize: results.thirdPrize.length
     });
     
-    // 6. Guardar resultado
+    // 7. Guardar resultado
     const gameResultId = Date.now().toString();
     
     // Preparar datos serializables para Firestore
@@ -150,9 +174,17 @@ exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
     
     await db.collection(GAME_RESULTS_COLLECTION).doc(gameResultId).set(serializableResult);
     
+    // 8. Actualizar el control de sorteos para este minuto
+    await drawControlRef.set({
+      timestamp: FieldValue.serverTimestamp(),
+      inProgress: false,
+      completed: true,
+      resultId: gameResultId
+    });
+    
     logger.info("Sorteo procesado con éxito con ID:", gameResultId);
     
-    return { success: true, resultId: gameResultId };
+    return { success: true, resultId: gameResultId, alreadyProcessed: false };
   } catch (error) {
     logger.error("Error procesando el sorteo:", error);
     return { success: false, error: error.message };
