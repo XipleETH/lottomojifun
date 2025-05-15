@@ -35,7 +35,8 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
             // Validar que los datos tengan la estructura esperada
             return {
               id: doc.id,
-              timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : Date.now(),
+              timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : 
+                         typeof data.timestamp === 'string' ? new Date(data.timestamp).getTime() : Date.now(),
               winningNumbers: Array.isArray(data.winningNumbers) ? data.winningNumbers : [],
               firstPrize: Array.isArray(data.firstPrize) ? data.firstPrize : [],
               secondPrize: Array.isArray(data.secondPrize) ? data.secondPrize : [],
@@ -60,29 +61,31 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
   }, []);
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
+    const date = new Date(timestamp);
+    return date.toLocaleString();
   };
 
-  const renderPrizeWinners = (result: GameResult, prizeType: keyof Pick<GameResult, 'firstPrize' | 'secondPrize' | 'thirdPrize'>) => {
-    if (!result || !result[prizeType]) return null;
-    
+  const renderPrizeWinners = (result: GameResult, prizeType: 'firstPrize' | 'secondPrize' | 'thirdPrize') => {
     const winners = result[prizeType];
-    if (winners.length === 0) return null;
+    if (!winners || winners.length === 0) return null;
 
-    const prizeLabels = {
-      firstPrize: '🏆 Primer Premio',
-      secondPrize: '🥈 Segundo Premio',
-      thirdPrize: '🥉 Tercer Premio'
-    };
+    const prizeName = prizeType === 'firstPrize' 
+      ? 'Primer Premio 🥇' 
+      : prizeType === 'secondPrize' 
+        ? 'Segundo Premio 🥈' 
+        : 'Tercer Premio 🥉';
 
     return (
-      <div className="mt-2">
-        <span className="font-semibold">{prizeLabels[prizeType]}</span>
-        <div className="flex flex-wrap gap-2 mt-1">
+      <div className="mt-3">
+        <h4 className="font-semibold text-purple-700">{prizeName}</h4>
+        <div className="mt-1 space-y-1">
           {winners.map((ticket, idx) => (
-            <div key={ticket.id || `ticket-${idx}`} 
-                 className="bg-white/50 rounded-lg px-3 py-1 text-sm">
-              {ticket.numbers?.join(' ') || 'Ticket inválido'}
+            <div key={`${ticket.id || idx}`} className="bg-white/70 p-2 rounded-lg">
+              <div className="flex flex-wrap gap-2">
+                {Array.isArray(ticket.numbers) && ticket.numbers.map((emoji, i) => (
+                  <span key={i} className="text-xl">{emoji}</span>
+                ))}
+              </div>
             </div>
           ))}
         </div>

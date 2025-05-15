@@ -92,9 +92,24 @@ export function useGameState() {
           timestamp: new Date().toISOString(),
           dateTime: new Date().toISOString(),
           winningNumbers: gameResult.winningNumbers,
-          firstPrize: gameResult.firstPrize,
-          secondPrize: gameResult.secondPrize,
-          thirdPrize: gameResult.thirdPrize
+          firstPrize: gameResult.firstPrize.map(ticket => ({
+            id: ticket.id,
+            numbers: ticket.numbers,
+            timestamp: ticket.timestamp,
+            userId: ticket.userId || 'anonymous'
+          })),
+          secondPrize: gameResult.secondPrize.map(ticket => ({
+            id: ticket.id,
+            numbers: ticket.numbers,
+            timestamp: ticket.timestamp,
+            userId: ticket.userId || 'anonymous'
+          })),
+          thirdPrize: gameResult.thirdPrize.map(ticket => ({
+            id: ticket.id,
+            numbers: ticket.numbers,
+            timestamp: ticket.timestamp,
+            userId: ticket.userId || 'anonymous'
+          }))
         };
 
         setDoc(doc(db, 'game_results', gameResult.id), resultData)

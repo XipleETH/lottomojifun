@@ -66,7 +66,33 @@ export const processGameDraw = async (): Promise<void> => {
       ...results
     };
     
-    await setDoc(doc(db, GAME_RESULTS_COLLECTION, gameResult.id), gameResult);
+    // Preparar datos serializables para Firestore
+    const serializableResult = {
+      id: gameResult.id,
+      timestamp: new Date().toISOString(),
+      dateTime: new Date().toISOString(), // Fecha legible como respaldo
+      winningNumbers: gameResult.winningNumbers,
+      firstPrize: gameResult.firstPrize.map(ticket => ({
+        id: ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous'
+      })),
+      secondPrize: gameResult.secondPrize.map(ticket => ({
+        id: ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous'
+      })),
+      thirdPrize: gameResult.thirdPrize.map(ticket => ({
+        id: ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous'
+      }))
+    };
+    
+    await setDoc(doc(db, GAME_RESULTS_COLLECTION, gameResult.id), serializableResult);
     
     console.log('Game draw processed successfully:', gameResult);
   } catch (error) {
