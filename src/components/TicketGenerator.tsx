@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { EmojiGrid } from './EmojiGrid';
-import { generateRandomEmojis } from '../utils/gameLogic';
 
 interface TicketGeneratorProps {
   onGenerateTicket: (numbers: string[]) => void;
+  onGenerateRandomTicket?: () => void;
   disabled: boolean;
   ticketCount: number;
   maxTickets: number;
@@ -11,6 +11,7 @@ interface TicketGeneratorProps {
 
 export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   onGenerateTicket,
+  onGenerateRandomTicket,
   disabled,
   ticketCount,
   maxTickets
@@ -41,9 +42,8 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   };
 
   const handleRandomGenerate = () => {
-    if (disabled) return;
-    const randomEmojis = generateRandomEmojis(4);
-    onGenerateTicket(randomEmojis);
+    if (disabled || !onGenerateRandomTicket) return;
+    onGenerateRandomTicket();
   };
 
   return (

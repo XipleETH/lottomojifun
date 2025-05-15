@@ -24,13 +24,26 @@ const RESULTS_LIMIT = 50;
 // Convertir documento de Firestore a nuestro tipo de resultado de juego
 const mapFirestoreGameResult = (doc: any): GameResult => {
   const data = doc.data();
+  
+  // Asegurarse de que los tickets tengan la estructura correcta
+  const mapTickets = (tickets: any[]): Ticket[] => {
+    if (!tickets || !Array.isArray(tickets)) return [];
+    
+    return tickets.map(ticket => ({
+      id: ticket.id || '',
+      numbers: ticket.numbers || [],
+      timestamp: ticket.timestamp?.toMillis ? ticket.timestamp.toMillis() : (ticket.timestamp || Date.now()),
+      userId: ticket.userId || ''
+    }));
+  };
+  
   return {
     id: doc.id,
-    timestamp: data.timestamp?.toMillis() || Date.now(),
+    timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : (data.timestamp || Date.now()),
     winningNumbers: data.winningNumbers || [],
-    firstPrize: data.firstPrize || [],
-    secondPrize: data.secondPrize || [],
-    thirdPrize: data.thirdPrize || []
+    firstPrize: mapTickets(data.firstPrize || []),
+    secondPrize: mapTickets(data.secondPrize || []),
+    thirdPrize: mapTickets(data.thirdPrize || [])
   };
 };
 
@@ -40,8 +53,8 @@ const mapFirestoreTicket = (doc: any): Ticket => {
   return {
     id: doc.id,
     numbers: data.numbers || [],
-    timestamp: data.timestamp?.toMillis() || Date.now(),
-    userId: data.userId
+    timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : (data.timestamp || Date.now()),
+    userId: data.userId || ''
   };
 };
 
@@ -67,20 +80,25 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
 export const generateTicket = async (numbers: string[]): Promise<Ticket | null> => {
   try {
     const user = getCurrentUser();
+    if (!user) {
+      console.error('No user logged in');
+      return null;
+    }
     
     const ticketData = {
       numbers,
       timestamp: serverTimestamp(),
-      userId: user?.id || 'anonymous'
+      userId: user.id
     };
     
+    console.log('Generando ticket para usuario:', user.id);
     const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
     
     return {
       id: ticketRef.id,
       numbers,
       timestamp: Date.now(),
-      userId: user?.id || 'anonymous'
+      userId: user.id
     };
   } catch (error) {
     console.error('Error generating ticket:', error);
@@ -110,10 +128,12 @@ export const subscribeToUserTickets = (
 ) => {
   const user = getCurrentUser();
   if (!user) {
+    console.warn('No user logged in, cannot subscribe to tickets');
     callback([]);
     return () => {};
   }
   
+  console.log('Suscribiéndose a tickets para usuario:', user.id);
   const ticketsQuery = query(
     collection(db, TICKETS_COLLECTION),
     where('userId', '==', user.id),
@@ -122,7 +142,11 @@ export const subscribeToUserTickets = (
   
   return onSnapshot(ticketsQuery, (snapshot) => {
     const tickets = snapshot.docs.map(mapFirestoreTicket);
+    console.log('Tickets recibidos:', tickets.length);
     callback(tickets);
+  }, (error) => {
+    console.error('Error subscribing to tickets:', error);
+    callback([]);
   });
 };
 
@@ -139,5 +163,8 @@ export const subscribeToCurrentGameState = (
     const timeRemaining = Math.max(0, Math.floor((nextDrawTime - Date.now()) / 1000));
     
     callback(winningNumbers, timeRemaining);
+  }, (error) => {
+    console.error('Error subscribing to game state:', error);
+    callback([], 60);
   });
 }; 

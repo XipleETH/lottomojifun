@@ -9,10 +9,10 @@ import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
-import { initializeGameState, processGameDraw } from './firebase/gameServer';
+import { initializeGameState, checkAndProcessGameDraw } from './firebase/gameServer';
 
 function App() {
-  const { gameState, generateTicket } = useGameState();
+  const { gameState, generateTicket, generateRandomTicket } = useGameState();
   const { context } = useMiniKit();
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
@@ -23,11 +23,10 @@ function App() {
     sdk.actions.ready();
     initializeGameState();
     
-    // Solo para desarrollo - simular sorteo cada minuto
-    // En producción, esto se haría con Cloud Functions
+    // Verificar si es hora de un sorteo cada 10 segundos
     const interval = setInterval(() => {
-      processGameDraw();
-    }, 60000);
+      checkAndProcessGameDraw();
+    }, 10000);
     
     return () => clearInterval(interval);
   }, []);
@@ -104,6 +103,7 @@ function App() {
 
         <TicketGenerator
           onGenerateTicket={generateTicket}
+          onGenerateRandomTicket={generateRandomTicket}
           disabled={gameState.tickets.length >= 10}
           ticketCount={gameState.tickets.length}
           maxTickets={10}
