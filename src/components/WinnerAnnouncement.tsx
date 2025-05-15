@@ -42,9 +42,13 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
       <div className="text-center mb-6">
         <div className="text-xl font-bold mb-2">Emojis Ganadores:</div>
         <div className="flex justify-center items-center gap-2 text-3xl mb-4">
-          {winningNumbers.map((emoji, index) => (
-            <span key={index} className="inline-block bg-purple-100 p-2 rounded-lg">{emoji}</span>
-          ))}
+          {winningNumbers && winningNumbers.length > 0 ? (
+            winningNumbers.map((emoji, index) => (
+              <span key={index} className="inline-block bg-purple-100 p-2 rounded-lg">{emoji}</span>
+            ))
+          ) : (
+            <span className="text-gray-500">Esperando próximo sorteo...</span>
+          )}
         </div>
       </div>
       

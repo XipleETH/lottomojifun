@@ -7,7 +7,9 @@ import {
   query, 
   where, 
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { generateRandomEmojis, checkWin } from '../utils/gameLogic';
 import { Ticket, GameResult } from '../types';
@@ -103,16 +105,35 @@ export const processGameDraw = async (): Promise<void> => {
 // Inicializar el estado del juego si no existe
 export const initializeGameState = async (): Promise<void> => {
   try {
+    // 1. Obtener el último resultado del juego
+    const resultsQuery = query(
+      collection(db, GAME_RESULTS_COLLECTION),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+    
+    const snapshot = await getDocs(resultsQuery);
+    let lastWinningNumbers: string[] = [];
+    
+    if (!snapshot.empty) {
+      const latestDoc = snapshot.docs[0];
+      const data = latestDoc.data();
+      lastWinningNumbers = data.winningNumbers || [];
+      console.log('Últimos números ganadores encontrados:', lastWinningNumbers);
+    }
+    
+    // 2. Calcular próximo sorteo
     const now = new Date();
     const nextDrawTime = new Date(now.getTime() + DRAW_INTERVAL_MS);
     
+    // 3. Actualizar estado del juego con los últimos números ganadores
     await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
-      winningNumbers: [],
+      winningNumbers: lastWinningNumbers,
       nextDrawTime: Timestamp.fromDate(nextDrawTime),
       lastUpdated: serverTimestamp()
     }, { merge: true });
     
-    console.log('Game state initialized');
+    console.log('Game state initialized with last winning numbers');
   } catch (error) {
     console.error('Error initializing game state:', error);
   }
