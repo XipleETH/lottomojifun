@@ -1,0 +1,29 @@
+{  
+  "frame": {
+    "version": "1",
+    "name": "LottoMoji",
+    "iconUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
+    "splashImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
+    "splashBackgroundColor": "#8B5CF6",
+    "homeUrl": "https://lottomoji-miniapp.vercel.app",
+    "webhookUrl": "https://lottomoji-miniapp.vercel.app/api/webhook",
+    "subtitle": "Match emojis to win!",
+    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck!",
+    "screenshotUrls": [
+      "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
+    ],
+    "primaryCategory": "games",
+    "tags": [
+      "lottery",
+      "games",
+      "emoji",
+      "prizes",
+      "fun"
+    ],
+    "heroImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
+    "tagline": "Match emojis, win prizes!",
+    "ogTitle": "LottoMoji - Emoji Lottery Game",
+    "ogDescription": "Play the exciting emoji-based lottery game. Match 4 emojis to win amazing prizes!",
+    "ogImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
+  }
+} 
