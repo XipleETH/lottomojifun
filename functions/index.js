@@ -82,10 +82,10 @@ const checkWin = (ticketNumbers, winningNumbers) => {
     secondPrize: exactMatches === 3,
     
     // 4 aciertos en cualquier orden (tercer premio)
-    thirdPrize: exactMatches < 4 && unorderedMatches === 4,
+    thirdPrize: unorderedMatches === 4 && exactMatches !== 4,
     
     // 3 aciertos en cualquier orden (cuarto premio - ticket gratis)
-    freePrize: exactMatches < 3 && unorderedMatches === 3
+    freePrize: unorderedMatches === 3 && exactMatches !== 3
   };
 };
 
