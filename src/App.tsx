@@ -87,15 +87,13 @@ function App() {
             <Timer seconds={gameState.timeRemaining} />
         </div>
 
-        {gameState.lastResults && (
-          <WinnerAnnouncement 
-            winningNumbers={gameState.winningNumbers}
-            firstPrize={gameState.lastResults.firstPrize}
-            secondPrize={gameState.lastResults.secondPrize}
-            thirdPrize={gameState.lastResults.thirdPrize}
-            currentUserId={user?.id}
-          />
-        )}
+        <WinnerAnnouncement 
+          winningNumbers={gameState.winningNumbers.length > 0 ? gameState.winningNumbers : ['❓', '❓', '❓', '❓']}
+          firstPrize={gameState.lastResults?.firstPrize || []}
+          secondPrize={gameState.lastResults?.secondPrize || []}
+          thirdPrize={gameState.lastResults?.thirdPrize || []}
+          currentUserId={user?.id}
+        />
 
         {import.meta.env.DEV && (
           <div className="flex justify-center gap-4 mb-6">

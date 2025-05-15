@@ -40,12 +40,15 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
       </h2>
       
       <div className="text-center mb-6">
-        <div className="text-xl font-bold mb-2">Números Ganadores:</div>
+        <div className="text-xl font-bold mb-2">Emojis Ganadores:</div>
         <div className="flex justify-center items-center gap-2 text-3xl mb-4">
           {winningNumbers.map((emoji, index) => (
-            <span key={index} className="inline-block bg-purple-100 p-2 rounded-lg">{emoji}</span>
+            <span key={index} className={`inline-block ${emoji === '❓' ? 'bg-gray-100' : 'bg-purple-100'} p-2 rounded-lg`}>{emoji}</span>
           ))}
         </div>
+        {winningNumbers.includes('❓') && (
+          <div className="text-gray-600 italic">Esperando próximo sorteo...</div>
+        )}
       </div>
       
       {(firstPrize.length > 0 || secondPrize.length > 0 || thirdPrize.length > 0) && (
@@ -111,9 +114,15 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
         </div>
       )}
       
-      {!firstPrize.length && !secondPrize.length && !thirdPrize.length && (
+      {!firstPrize.length && !secondPrize.length && !thirdPrize.length && !winningNumbers.includes('❓') && (
         <div className="text-center text-gray-700">
           No hubo ganadores en este sorteo. ¡Prueba suerte en el próximo!
+        </div>
+      )}
+      
+      {!firstPrize.length && !secondPrize.length && !thirdPrize.length && winningNumbers.includes('❓') && (
+        <div className="text-center text-gray-700">
+          El primer sorteo comenzará pronto. ¡Genera tus tickets para participar!
         </div>
       )}
       
