@@ -6,7 +6,6 @@ import {
   subscribeToCurrentGameState,
   subscribeToGameResults
 } from '../firebase/game';
-import { useAuth } from '../components/AuthProvider';
 
 const MAX_TICKETS = 10;
 
@@ -20,15 +19,10 @@ const initialGameState: GameState = {
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
-  const { user } = useAuth();
 
   // Suscribirse a los tickets del usuario
   useEffect(() => {
-    if (!user) return;
-    
-    console.log("Suscribiéndose a tickets del usuario:", user.id);
     const unsubscribe = subscribeToUserTickets((tickets) => {
-      console.log("Tickets recibidos:", tickets.length);
       setGameState(prev => ({
         ...prev,
         tickets
@@ -36,33 +30,25 @@ export function useGameState() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
   // Suscribirse al estado actual del juego
   useEffect(() => {
-    console.log("Suscribiéndose al estado del juego");
-    const unsubscribe = subscribeToCurrentGameState((winningNumbers, remainingTime) => {
-      console.log("Estado del juego actualizado:", { winningNumbers, remainingSeconds: remainingTime });
-      
+    const unsubscribe = subscribeToCurrentGameState((winningNumbers, timeRemaining) => {
       setGameState(prev => ({
         ...prev,
         winningNumbers
       }));
-      
-      setTimeRemaining(remainingTime);
+      setTimeRemaining(timeRemaining);
     });
 
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   // Suscribirse a los resultados del juego
   useEffect(() => {
-    console.log("Suscribiéndose a resultados del juego");
     const unsubscribe = subscribeToGameResults((results) => {
       if (results.length > 0) {
-        console.log("Resultados recibidos:", results[0]);
         const latestResult = results[0];
         setGameState(prev => ({
           ...prev,
@@ -78,33 +64,17 @@ export function useGameState() {
     return () => unsubscribe();
   }, []);
 
-  // Generar un ticket aleatorio
-  const generateRandomTicket = useCallback(async () => {
-    if (gameState.tickets.length >= MAX_TICKETS) return;
-    
-    // Importar la función de generación de emojis aleatorios
-    const { generateRandomEmojis } = await import('../utils/gameLogic');
-    
-    // Generar 4 emojis aleatorios
-    const randomEmojis = generateRandomEmojis(4);
-    
-    await generateTicket(randomEmojis);
-  }, [gameState.tickets.length, generateTicket]);
-
-  // Generar un ticket con emojis específicos
   const generateTicket = useCallback(async (numbers: string[]) => {
-    if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS || !user) return;
+    if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) return;
     
-    console.log("Generando ticket:", numbers);
     await generateFirebaseTicket(numbers);
-  }, [gameState.tickets.length, user]);
+  }, [gameState.tickets.length]);
 
   return {
     gameState: {
       ...gameState,
       timeRemaining
     },
-    generateTicket,
-    generateRandomTicket
+    generateTicket
   };
 }
