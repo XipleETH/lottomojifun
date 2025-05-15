@@ -6,7 +6,7 @@ import { useRealTimeTimer } from './useRealTimeTimer';
 import { subscribeToUserTickets } from '../firebase/game';
 import { useEffect } from 'react';
 import { db } from '../firebase/config';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const MAX_TICKETS = 10;
 
@@ -89,7 +89,7 @@ export function useGameState() {
         
         // Save result to Firebase
         const resultData = {
-          timestamp: new Date().toISOString(),
+          timestamp: serverTimestamp(),
           dateTime: new Date().toISOString(),
           winningNumbers: gameResult.winningNumbers,
           firstPrize: gameResult.firstPrize.map(ticket => ({

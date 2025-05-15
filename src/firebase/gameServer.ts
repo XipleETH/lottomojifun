@@ -69,7 +69,7 @@ export const processGameDraw = async (): Promise<void> => {
     // Preparar datos serializables para Firestore
     const serializableResult = {
       id: gameResult.id,
-      timestamp: new Date().toISOString(),
+      timestamp: serverTimestamp(),
       dateTime: new Date().toISOString(), // Fecha legible como respaldo
       winningNumbers: gameResult.winningNumbers,
       firstPrize: gameResult.firstPrize.map(ticket => ({

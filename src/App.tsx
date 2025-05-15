@@ -12,6 +12,7 @@ import { useAuth } from './components/AuthProvider';
 import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { FirestoreTest } from './components/FirestoreTest';
+import { FirestoreDirectWrite } from './components/FirestoreDirectWrite';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -116,6 +117,7 @@ function App() {
         {import.meta.env.DEV && showDiagnostic && (
           <div className="mb-8">
             <FirestoreTest />
+            <FirestoreDirectWrite />
           </div>
         )}
 

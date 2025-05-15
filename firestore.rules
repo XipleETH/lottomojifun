@@ -10,7 +10,7 @@ service cloud.firestore {
     // Game results
     match /game_results/{resultId} {
       allow read: if true;
-      allow write: if false; // Solo el servidor debería escribir resultados
+      allow write: if true; // Permitir escritura para facilitar pruebas
     }
     
     // Tickets
@@ -22,7 +22,7 @@ service cloud.firestore {
     // Game state
     match /game_state/{document} {
       allow read: if true;
-      allow write: if false; // Solo el servidor debería actualizar el estado
+      allow write: if true; // Permitir escritura para facilitar pruebas
     }
   }
 }

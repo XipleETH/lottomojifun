@@ -32,11 +32,24 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
             const data = doc.data();
             console.log(`Procesando documento ${doc.id}:`, data);
             
+            // Función para extraer el timestamp en milisegundos
+            const getTimestamp = (firestoreTimestamp: any): number => {
+              if (firestoreTimestamp?.toMillis) {
+                return firestoreTimestamp.toMillis();
+              } else if (typeof firestoreTimestamp === 'string') {
+                return new Date(firestoreTimestamp).getTime();
+              } else if (firestoreTimestamp?.seconds) {
+                // Manejar formato timestamp de Firestore {seconds, nanoseconds}
+                return firestoreTimestamp.seconds * 1000 + (firestoreTimestamp.nanoseconds / 1000000);
+              } else {
+                return Date.now();
+              }
+            };
+            
             // Validar que los datos tengan la estructura esperada
             return {
               id: doc.id,
-              timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : 
-                         typeof data.timestamp === 'string' ? new Date(data.timestamp).getTime() : Date.now(),
+              timestamp: getTimestamp(data.timestamp),
               winningNumbers: Array.isArray(data.winningNumbers) ? data.winningNumbers : [],
               firstPrize: Array.isArray(data.firstPrize) ? data.firstPrize : [],
               secondPrize: Array.isArray(data.secondPrize) ? data.secondPrize : [],
