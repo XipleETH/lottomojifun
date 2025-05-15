@@ -53,7 +53,8 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
               winningNumbers: Array.isArray(data.winningNumbers) ? data.winningNumbers : [],
               firstPrize: Array.isArray(data.firstPrize) ? data.firstPrize : [],
               secondPrize: Array.isArray(data.secondPrize) ? data.secondPrize : [],
-              thirdPrize: Array.isArray(data.thirdPrize) ? data.thirdPrize : []
+              thirdPrize: Array.isArray(data.thirdPrize) ? data.thirdPrize : [],
+              freePrize: Array.isArray(data.freePrize) ? data.freePrize : []
             };
           } catch (error) {
             console.error('Error mapping document in GameHistoryModal:', error, doc.id);
@@ -78,7 +79,7 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
     return date.toLocaleString();
   };
 
-  const renderPrizeWinners = (result: GameResult, prizeType: 'firstPrize' | 'secondPrize' | 'thirdPrize') => {
+  const renderPrizeWinners = (result: GameResult, prizeType: 'firstPrize' | 'secondPrize' | 'thirdPrize' | 'freePrize') => {
     const winners = result[prizeType];
     if (!winners || winners.length === 0) return null;
 
@@ -86,7 +87,9 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
       ? 'Primer Premio 🥇' 
       : prizeType === 'secondPrize' 
         ? 'Segundo Premio 🥈' 
-        : 'Tercer Premio 🥉';
+        : prizeType === 'thirdPrize'
+          ? 'Tercer Premio 🥉'
+          : 'Ticket Gratis 🎟️';
 
     return (
       <div className="mt-3">
@@ -151,6 +154,7 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
                   {renderPrizeWinners(result, 'firstPrize')}
                   {renderPrizeWinners(result, 'secondPrize')}
                   {renderPrizeWinners(result, 'thirdPrize')}
+                  {renderPrizeWinners(result, 'freePrize')}
                 </div>
               ))}
             </div>

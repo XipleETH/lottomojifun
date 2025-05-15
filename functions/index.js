@@ -43,7 +43,8 @@ const DRAW_INTERVAL_MS = 60000; // 1 minuto
 // Función para generar emojis aleatorios
 const generateRandomEmojis = (count) => {
   const EMOJIS = ['🌟', '🎈', '🎨', '🌈', '🦄', '🍭', '🎪', '🎠', '🎡', '🎢', 
-                  '🌺', '🦋', '🐬', '🌸', '🍦', '🎵', '🎯', '🌴', '🎩', '🎭'];
+                  '🌺', '🦋', '🐬', '🌸', '🍦', '🎵', '🎯', '🌴', '🎩', '🎭',
+                  '🎁', '🎮', '🚀', '🌍', '🍀'];
   
   const result = [];
   for (let i = 0; i < count; i++) {
@@ -80,10 +81,10 @@ const checkWin = (ticketNumbers, winningNumbers) => {
     // 3 aciertos en orden exacto (segundo premio)
     secondPrize: exactMatches === 3,
     
-    // 4 aciertos en desorden (tercer premio)
+    // 4 aciertos en cualquier orden (tercer premio)
     thirdPrize: exactMatches < 4 && unorderedMatches === 4,
     
-    // 3 aciertos en desorden (ticket gratis)
+    // 3 aciertos en cualquier orden (cuarto premio - ticket gratis)
     freePrize: exactMatches < 3 && unorderedMatches === 3
   };
 };

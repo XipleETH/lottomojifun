@@ -30,7 +30,8 @@ const mapFirestoreGameResult = (doc: any): GameResult => {
     winningNumbers: data.winningNumbers || [],
     firstPrize: data.firstPrize || [],
     secondPrize: data.secondPrize || [],
-    thirdPrize: data.thirdPrize || []
+    thirdPrize: data.thirdPrize || [],
+    freePrize: data.freePrize || []
   };
 };
 
@@ -64,6 +65,7 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
     const firstPrize = Array.isArray(result.firstPrize) ? result.firstPrize : [];
     const secondPrize = Array.isArray(result.secondPrize) ? result.secondPrize : [];
     const thirdPrize = Array.isArray(result.thirdPrize) ? result.thirdPrize : [];
+    const freePrize = Array.isArray(result.freePrize) ? result.freePrize : [];
 
     // Generar un ID para el documento
     const docId = result.id || crypto.randomUUID();
@@ -74,7 +76,8 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
       winningNumbers: Array.isArray(result.winningNumbers) ? result.winningNumbers : [],
       firstPrize: prepareTickets(firstPrize),
       secondPrize: prepareTickets(secondPrize),
-      thirdPrize: prepareTickets(thirdPrize)
+      thirdPrize: prepareTickets(thirdPrize),
+      freePrize: prepareTickets(freePrize)
     };
     
     console.log('Datos preparados para Firestore:', resultData);

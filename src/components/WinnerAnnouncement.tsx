@@ -40,7 +40,7 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
   const getPrizeDescription = (prizeType: string) => {
     switch (prizeType) {
       case 'first':
-        return '4 aciertos en orden exacto';
+        return '4 aciertos en orden exacto (de 25 emojis posibles)';
       case 'second':
         return '3 aciertos en orden exacto';
       case 'third':
