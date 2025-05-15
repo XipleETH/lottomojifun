@@ -12,6 +12,9 @@ export interface User {
   id: string;
   username: string;
   avatar?: string;
+  walletAddress?: string;  // Dirección de billetera del usuario de Farcaster
+  fid?: number;            // Farcaster ID único
+  isFarcasterUser: boolean; // Indica si el usuario está autenticado a través de Farcaster
 }
 
 export interface Ticket {

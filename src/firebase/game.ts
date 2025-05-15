@@ -49,12 +49,23 @@ const mapFirestoreTicket = (doc: any): Ticket => {
 // Generar un ticket
 export const generateTicket = async (numbers: string[]): Promise<Ticket | null> => {
   try {
-    const user = getCurrentUser();
+    const user = await getCurrentUser();
     
+    // Verificar que el usuario esté autenticado con Farcaster
+    if (!user || !user.isFarcasterUser) {
+      console.error('Error generating ticket: User is not authenticated with Farcaster');
+      return null;
+    }
+    
+    // Incluir información de Farcaster en el ticket
     const ticketData = {
       numbers,
       timestamp: serverTimestamp(),
-      userId: user?.id || 'anonymous'
+      userId: user.id,
+      username: user.username,
+      walletAddress: user.walletAddress || null,
+      fid: user.fid || null,
+      isFarcasterUser: true
     };
     
     const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
@@ -63,7 +74,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       id: ticketRef.id,
       numbers,
       timestamp: Date.now(),
-      userId: user?.id || 'anonymous'
+      userId: user.id
     };
   } catch (error) {
     console.error('Error generating ticket:', error);

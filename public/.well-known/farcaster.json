@@ -13,8 +13,9 @@
     "splashBackgroundColor": "#8B5CF6",
     "homeUrl": "https://lottomojifun.vercel.app",
     "webhookUrl": "https://lottomojifun.vercel.app/api/webhook",
-    "subtitle": "Match emojis to win!",
-    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck!",
+    "subtitle": "Match emojis to win! Exclusive for Farcaster users",
+    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck! Only available for Farcaster Warpcast users.",
+    "requiresLogin": true,
     "screenshotUrls": [
       "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
     ],
@@ -24,12 +25,15 @@
       "games",
       "emoji",
       "prizes",
-      "fun"
+      "fun",
+      "farcaster",
+      "warpcast",
+      "web3"
     ],
     "heroImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
-    "tagline": "Match emojis, win prizes!",
-    "ogTitle": "LottoMoji - Emoji Lottery Game",
-    "ogDescription": "Play the exciting emoji-based lottery game. Match 4 emojis to win amazing prizes!",
+    "tagline": "Match emojis, win prizes! Farcaster exclusive lottery",
+    "ogTitle": "LottoMoji - Emoji Lottery Game for Farcaster",
+    "ogDescription": "Play the exciting emoji-based lottery game exclusively for Farcaster users. Match 4 emojis to win amazing prizes!",
     "ogImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
   }
 } 
