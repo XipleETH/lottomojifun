@@ -3,8 +3,10 @@ import { GameState, Ticket, GameResult } from '../types';
 import { checkWin, generateRandomEmojis } from '../utils/gameLogic';
 import { addGameResult } from '../utils/gameHistory';
 import { useRealTimeTimer } from './useRealTimeTimer';
-import { subscribeToUserTickets, saveGameResult } from '../firebase/game';
+import { subscribeToUserTickets } from '../firebase/game';
 import { useEffect } from 'react';
+import { db } from '../firebase/config';
+import { doc, setDoc } from 'firebase/firestore';
 
 const MAX_TICKETS = 10;
 
@@ -86,13 +88,18 @@ export function useGameState() {
         console.log('Resultado añadido al historial local');
         
         // Save result to Firebase
-        saveGameResult(gameResult)
-          .then(resultId => {
-            if (resultId) {
-              console.log('Resultado guardado en Firebase con ID:', resultId);
-            } else {
-              console.error('Error al guardar resultado en Firebase');
-            }
+        const resultData = {
+          timestamp: new Date().toISOString(),
+          dateTime: new Date().toISOString(),
+          winningNumbers: gameResult.winningNumbers,
+          firstPrize: gameResult.firstPrize,
+          secondPrize: gameResult.secondPrize,
+          thirdPrize: gameResult.thirdPrize
+        };
+
+        setDoc(doc(db, 'game_results', gameResult.id), resultData)
+          .then(() => {
+            console.log('Resultado guardado en Firebase con ID:', gameResult.id);
           })
           .catch(error => {
             console.error('Error al guardar resultado en Firebase:', error);

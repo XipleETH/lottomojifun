@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db } from '../firebase/config';
-import { collection, addDoc, getDocs, query, limit, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, limit, orderBy, doc, setDoc } from 'firebase/firestore';
 
 export const FirestoreTest: React.FC = () => {
   const [testResults, setTestResults] = useState<string[]>([]);
@@ -54,8 +54,8 @@ export const FirestoreTest: React.FC = () => {
         setTestResults(prev => [...prev, `❌ Error al leer game_results: ${error.message}`]);
       }
       
-      // Prueba 5: Intentar escribir un documento de prueba en game_results
-      setTestResults(prev => [...prev, "5. Intentando escribir un documento de prueba en game_results..."]);
+      // Prueba 5: Intentar escribir un documento de prueba en game_results con addDoc
+      setTestResults(prev => [...prev, "5. Intentando escribir un documento de prueba en game_results con addDoc..."]);
       const gameResultTest = {
         timestamp: new Date().toISOString(),
         winningNumbers: ["🍎", "🍊", "🍋", "🍉"],
@@ -68,7 +68,38 @@ export const FirestoreTest: React.FC = () => {
         const docRef = await addDoc(collection(db, "game_results"), gameResultTest);
         setTestResults(prev => [...prev, `✅ Escritura en game_results exitosa! ID: ${docRef.id}`]);
       } catch (error: any) {
-        setTestResults(prev => [...prev, `❌ Error al escribir en game_results: ${error.message}`]);
+        setTestResults(prev => [...prev, `❌ Error al escribir en game_results con addDoc: ${error.message}`]);
+      }
+      
+      // Prueba 6: Intentar escribir un documento de prueba en game_results con setDoc
+      setTestResults(prev => [...prev, "6. Intentando escribir un documento de prueba en game_results con setDoc..."]);
+      
+      try {
+        const docId = `test-${Date.now()}`;
+        await setDoc(doc(db, "game_results", docId), gameResultTest);
+        setTestResults(prev => [...prev, `✅ Escritura en game_results con setDoc exitosa! ID: ${docId}`]);
+      } catch (error: any) {
+        setTestResults(prev => [...prev, `❌ Error al escribir en game_results con setDoc: ${error.message}`]);
+      }
+      
+      // Prueba 7: Intentar escribir con formato exacto como el que usa el juego
+      setTestResults(prev => [...prev, "7. Intentando escribir con formato exacto como el que usa el juego..."]);
+      
+      try {
+        const docId = `game-${Date.now()}`;
+        const gameData = {
+          timestamp: new Date().toISOString(),
+          dateTime: new Date().toISOString(),
+          winningNumbers: ["🍎", "🍊", "🍋", "🍉"],
+          firstPrize: [],
+          secondPrize: [],
+          thirdPrize: []
+        };
+        
+        await setDoc(doc(db, "game_results", docId), gameData);
+        setTestResults(prev => [...prev, `✅ Escritura con formato de juego exitosa! ID: ${docId}`]);
+      } catch (error: any) {
+        setTestResults(prev => [...prev, `❌ Error al escribir con formato de juego: ${error.message}`]);
       }
       
       setTestResults(prev => [...prev, "Pruebas completadas!"]);
