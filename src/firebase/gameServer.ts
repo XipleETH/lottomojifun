@@ -9,10 +9,13 @@ import {
   serverTimestamp,
   Timestamp,
   orderBy,
-  limit
+  limit,
+  onSnapshot
 } from 'firebase/firestore';
 import { generateRandomEmojis, checkWin } from '../utils/gameLogic';
 import { Ticket, GameResult } from '../types';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from './config';
 
 // Constantes
 const GAME_STATE_DOC = 'current_game_state';
@@ -20,86 +23,28 @@ const TICKETS_COLLECTION = 'tickets';
 const GAME_RESULTS_COLLECTION = 'game_results';
 const DRAW_INTERVAL_MS = 60000; // 1 minuto
 
-// Esta función se ejecutaría en un servidor (Cloud Function)
-// Aquí la implementamos como una función que se puede llamar manualmente para simular
-export const processGameDraw = async (): Promise<void> => {
+// Función para solicitar un sorteo desde Firebase Functions
+export const requestGameDraw = async (): Promise<boolean> => {
   try {
-    // 1. Generar números ganadores
-    const winningNumbers = generateRandomEmojis(4);
-    
-    // 2. Calcular próximo sorteo
-    const now = new Date();
-    const nextDrawTime = new Date(now.getTime() + DRAW_INTERVAL_MS);
-    
-    // 3. Actualizar estado del juego
-    await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
-      winningNumbers,
-      nextDrawTime: Timestamp.fromDate(nextDrawTime),
-      lastUpdated: serverTimestamp()
-    });
-    
-    // 4. Obtener tickets activos
-    const ticketsSnapshot = await getDocs(collection(db, TICKETS_COLLECTION));
-    const tickets: Ticket[] = ticketsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as Ticket));
-    
-    // 5. Comprobar ganadores
-    const results = {
-      firstPrize: [] as Ticket[],
-      secondPrize: [] as Ticket[],
-      thirdPrize: [] as Ticket[]
-    };
-    
-    tickets.forEach(ticket => {
-      if (!ticket?.numbers) return;
-      const winStatus = checkWin(ticket.numbers, winningNumbers);
-      if (winStatus.firstPrize) results.firstPrize.push(ticket);
-      else if (winStatus.secondPrize) results.secondPrize.push(ticket);
-      else if (winStatus.thirdPrize) results.thirdPrize.push(ticket);
-    });
-    
-    // 6. Guardar resultado
-    const gameResult: GameResult = {
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
-      winningNumbers,
-      ...results
-    };
-    
-    // Preparar datos serializables para Firestore
-    const serializableResult = {
-      id: gameResult.id,
-      timestamp: serverTimestamp(),
-      dateTime: new Date().toISOString(), // Fecha legible como respaldo
-      winningNumbers: gameResult.winningNumbers,
-      firstPrize: gameResult.firstPrize.map(ticket => ({
-        id: ticket.id,
-        numbers: ticket.numbers,
-        timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
-      })),
-      secondPrize: gameResult.secondPrize.map(ticket => ({
-        id: ticket.id,
-        numbers: ticket.numbers,
-        timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
-      })),
-      thirdPrize: gameResult.thirdPrize.map(ticket => ({
-        id: ticket.id,
-        numbers: ticket.numbers,
-        timestamp: ticket.timestamp,
-        userId: ticket.userId || 'anonymous'
-      }))
-    };
-    
-    await setDoc(doc(db, GAME_RESULTS_COLLECTION, gameResult.id), serializableResult);
-    
-    console.log('Game draw processed successfully:', gameResult);
+    const triggerGameDraw = httpsCallable(functions, 'triggerGameDraw');
+    const result = await triggerGameDraw();
+    console.log('Solicitud de sorteo enviada a Firebase Functions:', result);
+    return true;
   } catch (error) {
-    console.error('Error processing game draw:', error);
+    console.error('Error al solicitar sorteo desde Firebase Functions:', error);
+    return false;
   }
+};
+
+// Suscribirse a cambios en el estado del juego
+export const subscribeToGameState = (callback: (nextDrawTime: number) => void) => {
+  const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
+  
+  return onSnapshot(stateDocRef, (snapshot) => {
+    const data = snapshot.data() || {};
+    const nextDrawTime = data.nextDrawTime?.toMillis() || Date.now() + DRAW_INTERVAL_MS;
+    callback(nextDrawTime);
+  });
 };
 
 // Inicializar el estado del juego si no existe
@@ -124,12 +69,15 @@ export const initializeGameState = async (): Promise<void> => {
     
     // 2. Calcular próximo sorteo
     const now = new Date();
-    const nextDrawTime = new Date(now.getTime() + DRAW_INTERVAL_MS);
+    const nextMinute = new Date(now);
+    nextMinute.setMinutes(now.getMinutes() + 1);
+    nextMinute.setSeconds(0);
+    nextMinute.setMilliseconds(0);
     
     // 3. Actualizar estado del juego con los últimos números ganadores
     await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
       winningNumbers: lastWinningNumbers,
-      nextDrawTime: Timestamp.fromDate(nextDrawTime),
+      nextDrawTime: Timestamp.fromDate(nextMinute),
       lastUpdated: serverTimestamp()
     }, { merge: true });
     
