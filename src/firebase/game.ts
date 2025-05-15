@@ -65,6 +65,9 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
     const secondPrize = Array.isArray(result.secondPrize) ? result.secondPrize : [];
     const thirdPrize = Array.isArray(result.thirdPrize) ? result.thirdPrize : [];
 
+    // Generar un ID para el documento
+    const docId = result.id || crypto.randomUUID();
+
     const resultData = {
       timestamp: serverTimestamp(),
       dateTime: new Date().toISOString(), // Añadir una fecha legible como respaldo
@@ -76,10 +79,11 @@ export const saveGameResult = async (result: GameResult): Promise<string | null>
     
     console.log('Datos preparados para Firestore:', resultData);
     
-    const resultRef = await addDoc(collection(db, GAME_RESULTS_COLLECTION), resultData);
-    console.log('Documento creado en Firestore con ID:', resultRef.id);
+    // Usar setDoc en lugar de addDoc
+    await setDoc(doc(db, GAME_RESULTS_COLLECTION, docId), resultData);
+    console.log('Documento creado en Firestore con ID:', docId);
     
-    return resultRef.id;
+    return docId;
   } catch (error) {
     console.error('Error saving game result:', error);
     return null;

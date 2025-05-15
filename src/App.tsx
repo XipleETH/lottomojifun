@@ -1,16 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Timer } from './components/Timer';
 import { Ticket as TicketComponent } from './components/Ticket';
 import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
-import { Trophy, UserCircle, Zap } from 'lucide-react';
+import { Trophy, UserCircle, Zap, Terminal } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
+import { FirestoreTest } from './components/FirestoreTest';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -18,6 +19,7 @@ function App() {
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
   const { user, isLoading } = useAuth();
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   // Inicializar Firebase y SDK
   useEffect(() => {
@@ -95,13 +97,25 @@ function App() {
         )}
 
         {import.meta.env.DEV && (
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center gap-4 mb-6">
             <button
               onClick={forceGameDraw}
               className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
             >
-              <Zap size={16} /> Forzar Sorteo (Solo Desarrollo)
+              <Zap size={16} /> Forzar Sorteo
             </button>
+            <button
+              onClick={() => setShowDiagnostic(!showDiagnostic)}
+              className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <Terminal size={16} /> {showDiagnostic ? 'Ocultar Diagnóstico' : 'Mostrar Diagnóstico'}
+            </button>
+          </div>
+        )}
+
+        {import.meta.env.DEV && showDiagnostic && (
+          <div className="mb-8">
+            <FirestoreTest />
           </div>
         )}
 
