@@ -13,7 +13,7 @@ export const Ticket: React.FC<TicketProps> = ({ ticket, isWinner }) => {
     first: 'bg-gradient-to-r from-yellow-400/90 to-yellow-600/90 shadow-yellow-500/50',
     second: 'bg-gradient-to-r from-slate-400/90 to-slate-600/90 shadow-slate-500/50',
     third: 'bg-gradient-to-r from-amber-700/90 to-amber-900/90 shadow-amber-800/50',
-    null: isTemporary ? 'bg-blue-100/80 animate-pulse' : 'bg-white/80'
+    null: 'bg-white/80'
   };
 
   const winnerClass = isWinner ? winnerClasses[isWinner] : winnerClasses.null;
@@ -30,7 +30,7 @@ export const Ticket: React.FC<TicketProps> = ({ ticket, isWinner }) => {
         <span key={idx} className="text-2xl">{emoji}</span>
       ))}
       <div className="w-full text-center mt-2 text-xs opacity-60">
-        {isTemporary ? 'Generando...' : `Ticket #${ticket.id?.slice(-4) || 'N/A'}`}
+        {isTemporary ? 'Procesando...' : `Ticket #${ticket.id?.slice(-4) || 'N/A'}`}
       </div>
     </div>
   );
