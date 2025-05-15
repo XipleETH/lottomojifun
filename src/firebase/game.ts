@@ -48,13 +48,25 @@ const mapFirestoreTicket = (doc: any): Ticket => {
 // Guardar un resultado de juego
 export const saveGameResult = async (result: GameResult): Promise<string | null> => {
   try {
-    const resultRef = await addDoc(collection(db, GAME_RESULTS_COLLECTION), {
+    // Preparar objetos de ticket para Firestore (evitar errores de serialización)
+    const prepareTickets = (tickets: Ticket[]) => {
+      return tickets.map(ticket => ({
+        id: ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId
+      }));
+    };
+
+    const resultData = {
       timestamp: serverTimestamp(),
       winningNumbers: result.winningNumbers,
-      firstPrize: result.firstPrize,
-      secondPrize: result.secondPrize,
-      thirdPrize: result.thirdPrize
-    });
+      firstPrize: prepareTickets(result.firstPrize),
+      secondPrize: prepareTickets(result.secondPrize),
+      thirdPrize: prepareTickets(result.thirdPrize)
+    };
+    
+    const resultRef = await addDoc(collection(db, GAME_RESULTS_COLLECTION), resultData);
     
     return resultRef.id;
   } catch (error) {
