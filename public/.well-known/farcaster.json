@@ -1,4 +1,10 @@
 {  
+  "accountAssociation": {
+    "header": "eyJmaWQiOjM1ODIzNiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGEyMGU3MGE0RDJGRTZkOUI3MTFFNDI3OTRDNWIwZmQyMjU2YzMyNGUifQ",
+    "payload": "eyJkb21haW4iOiJsb3R0b21vamlmdW4udmVyY2VsLmFwcCJ9",
+    "signature": "MHgzNjA0MmQxYzRhZWU2NmEyNjhiMzdlY2YyN2RiY2I2MDdhZTRkOGI0MTY5NzA1NjdlMmU0ZGUwMDhiNTA0NGE2MjVjOGJjNzZiYThkMjdkNDU4M2VmMjQ0OTU1YmUyOWUzYTY5YjUyMDUwMWM5NTRlZDhmNWE1MTU1MTFiZDEyYzFj"
+  },
+
   "frame": {
     "version": "1",
     "name": "LottoMoji",
