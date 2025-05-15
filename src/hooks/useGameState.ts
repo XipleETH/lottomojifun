@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { GameState, Ticket, GameResult } from '../types';
 import { 
   generateTicket as generateFirebaseTicket, 
@@ -6,7 +6,6 @@ import {
   subscribeToCurrentGameState,
   subscribeToGameResults
 } from '../firebase/game';
-import { checkAndProcessGameDraw, processGameDraw } from '../firebase/gameServer';
 import { useAuth } from '../components/AuthProvider';
 
 const MAX_TICKETS = 10;
@@ -22,20 +21,6 @@ export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
   const { user } = useAuth();
-
-  // Verificar si es hora de un nuevo sorteo
-  useEffect(() => {
-    const checkDraw = async () => {
-      const processed = await checkAndProcessGameDraw();
-      console.log("Verificación de sorteo:", processed ? "Procesado" : "No necesario");
-    };
-    
-    // Verificar al inicio y cada 5 segundos
-    checkDraw();
-    const interval = setInterval(checkDraw, 5000);
-    
-    return () => clearInterval(interval);
-  }, []);
 
   // Suscribirse a los tickets del usuario
   useEffect(() => {
@@ -65,12 +50,6 @@ export function useGameState() {
       }));
       
       setTimeRemaining(remainingTime);
-      
-      // Si el contador llega a cero, verificar si es hora de un sorteo
-      if (remainingTime <= 0) {
-        console.log("Contador llegó a cero, verificando sorteo...");
-        checkAndProcessGameDraw();
-      }
     });
 
     return () => {

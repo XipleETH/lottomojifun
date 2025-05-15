@@ -100,8 +100,12 @@ export const initializeGameState = async (): Promise<void> => {
     
     // Si no existe o si el tiempo del próximo sorteo ya pasó, inicializar
     if (!stateDoc.exists() || (stateDoc.data()?.nextDrawTime?.toMillis() || 0) < Date.now()) {
+      // Calcular el próximo minuto exacto
       const now = new Date();
-      const nextDrawTime = new Date(now.getTime() + DRAW_INTERVAL_MS);
+      // Redondear al siguiente minuto
+      const nextMinute = new Date(Math.ceil(now.getTime() / 60000) * 60000);
+      
+      const nextDrawTime = nextMinute;
       
       await setDoc(stateRef, {
         winningNumbers: [],

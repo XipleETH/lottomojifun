@@ -9,7 +9,7 @@ import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
-import { initializeGameState, checkAndProcessGameDraw } from './firebase/gameServer';
+import { initializeGameState } from './firebase/gameServer';
 
 function App() {
   const { gameState, generateTicket, generateRandomTicket } = useGameState();
@@ -21,14 +21,11 @@ function App() {
   // Inicializar Firebase y SDK
   useEffect(() => {
     sdk.actions.ready();
-    initializeGameState();
     
-    // Verificar si es hora de un sorteo cada 10 segundos
-    const interval = setInterval(() => {
-      checkAndProcessGameDraw();
-    }, 10000);
-    
-    return () => clearInterval(interval);
+    // Inicializar el estado del juego
+    initializeGameState().then(() => {
+      console.log("Estado del juego inicializado");
+    });
   }, []);
 
   const handleWin = async () => {

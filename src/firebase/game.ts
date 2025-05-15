@@ -164,34 +164,8 @@ export const subscribeToCurrentGameState = (
     return Math.max(0, Math.min(60, Math.floor(diff / 1000)));
   };
   
-  // Actualizar el tiempo restante cada segundo
+  // Variable para el intervalo del contador
   let clientInterval: number | null = null;
-  let lastNextDrawTime: number = 0;
-  
-  const setupInterval = (nextDrawTime: number) => {
-    // Limpiar intervalo anterior si existe
-    if (clientInterval) {
-      clearInterval(clientInterval);
-    }
-    
-    lastNextDrawTime = nextDrawTime;
-    
-    // Calcular tiempo restante inicial
-    let remainingTime = calculateTimeRemaining(nextDrawTime);
-    callback([], remainingTime);
-    
-    // Actualizar cada segundo
-    clientInterval = window.setInterval(() => {
-      remainingTime = calculateTimeRemaining(nextDrawTime);
-      callback([], remainingTime);
-      
-      // Si llegamos a cero, no necesitamos seguir actualizando
-      if (remainingTime <= 0 && clientInterval) {
-        clearInterval(clientInterval);
-        clientInterval = null;
-      }
-    }, 1000);
-  };
   
   // Suscribirse a cambios en Firestore
   const unsubscribe = onSnapshot(stateDocRef, (snapshot) => {
@@ -199,16 +173,30 @@ export const subscribeToCurrentGameState = (
     const winningNumbers = data.winningNumbers || [];
     const nextDrawTime = data.nextDrawTime?.toMillis() || Date.now() + 60000;
     
-    // Solo configurar un nuevo intervalo si el tiempo de sorteo ha cambiado
-    if (nextDrawTime !== lastNextDrawTime) {
-      setupInterval(nextDrawTime);
+    // Limpiar cualquier intervalo existente
+    if (clientInterval) {
+      clearInterval(clientInterval);
+      clientInterval = null;
     }
     
-    // Notificar con los números ganadores y el tiempo restante actual
-    const timeRemaining = calculateTimeRemaining(nextDrawTime);
-    callback(winningNumbers, timeRemaining);
+    // Calcular tiempo inicial y notificar
+    let currentTimeRemaining = calculateTimeRemaining(nextDrawTime);
+    callback(winningNumbers, currentTimeRemaining);
     
-    console.log(`Estado del juego actualizado: ${winningNumbers.join(' ')} - Próximo sorteo en ${timeRemaining} segundos`);
+    console.log(`Estado del juego actualizado: ${winningNumbers.join(' ')} - Próximo sorteo en ${currentTimeRemaining} segundos`);
+    
+    // Configurar un nuevo intervalo para actualizar el contador cada segundo
+    clientInterval = window.setInterval(() => {
+      currentTimeRemaining = calculateTimeRemaining(nextDrawTime);
+      callback(winningNumbers, currentTimeRemaining);
+      
+      // Si llegamos a cero, detener el intervalo
+      if (currentTimeRemaining <= 0 && clientInterval) {
+        console.log("Contador llegó a cero");
+        clearInterval(clientInterval);
+        clientInterval = null;
+      }
+    }, 1000);
   }, (error) => {
     console.error('Error subscribing to game state:', error);
     callback([], 60);
