@@ -29,7 +29,7 @@ export const checkWin = (ticket: string[], winning: string[]): {
     }
   }
   
-  // Para el tercer premio y ticket gratis, necesitamos contar correctamente
+  // Para el segundo premio (ahora) y ticket gratis, necesitamos contar correctamente
   // cuántos emojis del ticket coinciden con los del resultado ganador
   
   // Crear copias para no modificar los originales
@@ -51,15 +51,13 @@ export const checkWin = (ticket: string[], winning: string[]): {
     // 4 aciertos en orden exacto (premio mayor)
     firstPrize: exactMatches === 4,
     
-    // 3 aciertos en orden exacto (segundo premio)
-    secondPrize: exactMatches === 3,
+    // 4 aciertos en cualquier orden (ahora segundo premio)
+    secondPrize: matchCount === 4 && exactMatches !== 4,
     
-    // 4 aciertos en cualquier orden (tercer premio)
-    // Solo si se aciertan los 4 emojis exactos del resultado ganador
-    thirdPrize: matchCount === 4 && exactMatches !== 4,
+    // 3 aciertos en orden exacto (ahora tercer premio)
+    thirdPrize: exactMatches === 3,
     
     // 3 aciertos en cualquier orden (cuarto premio - ticket gratis)
-    // Solo si se aciertan exactamente 3 de los 4 emojis del resultado ganador
     freePrize: matchCount === 3 && exactMatches !== 3
   };
 };

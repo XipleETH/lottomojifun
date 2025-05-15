@@ -42,9 +42,9 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
       case 'first':
         return '4 aciertos en orden exacto (de 25 emojis posibles)';
       case 'second':
-        return '3 aciertos en orden exacto';
-      case 'third':
         return '4 aciertos en cualquier orden';
+      case 'third':
+        return '3 aciertos en orden exacto';
       case 'free':
         return '3 aciertos en cualquier orden';
       default:
