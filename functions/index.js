@@ -91,40 +91,65 @@ const checkWin = (ticketNumbers, winningNumbers) => {
 
 // Función compartida para procesar el sorteo
 const processGameDraw = async () => {
+  // Guardar referencia al documento de control fuera del try para usarlo en el catch
+  const now = new Date();
+  const currentMinute = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+  const drawControlRef = db.collection('draw_control').doc(currentMinute);
+  
   try {
     logger.info("Procesando sorteo del juego...");
     
     // 1. Verificar si ya se procesó un sorteo para este minuto
-    const now = new Date();
-    const currentMinute = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
     
-    // Verificar en una colección especial para control de sorteos
-    const drawControlRef = db.collection('draw_control').doc(currentMinute);
-    
-    // Verificar primero si ya existe un documento completado para este minuto
-    const drawControlDoc = await drawControlRef.get();
-    if (drawControlDoc.exists) {
-      const data = drawControlDoc.data();
+    // Usar transacción para evitar condiciones de carrera
+    const result = await db.runTransaction(async (transaction) => {
+      const drawControlDoc = await transaction.get(drawControlRef);
       
-      // Si ya está completado, retornar el ID del resultado
-      if (data.completed) {
-        logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute} con ID: ${data.resultId}`);
-        return { success: true, alreadyProcessed: true, resultId: data.resultId };
+      // Si ya existe un documento para este minuto, otro proceso ya está manejando este sorteo
+      if (drawControlDoc.exists) {
+        const data = drawControlDoc.data();
+        
+        // Si ya está completado, retornar el ID del resultado
+        if (data.completed) {
+          logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute} con ID: ${data.resultId}`);
+          return { success: true, alreadyProcessed: true, resultId: data.resultId };
+        }
+        
+        // Si está en proceso pero no completado y lleva más de 30 segundos, considerarlo como fallido
+        // y permitir un nuevo intento
+        if (data.inProgress) {
+          const startTime = data.startedAt ? new Date(data.startedAt).getTime() : 0;
+          const elapsed = Date.now() - startTime;
+          
+          if (elapsed < 30000) { // menos de 30 segundos
+            logger.info(`Sorteo para el minuto ${currentMinute} en proceso, esperando...`);
+            return { success: false, inProgress: true };
+          } else {
+            logger.warn(`Sorteo para el minuto ${currentMinute} no completado después de 30s, reiniciando...`);
+            // Continuar con una nueva ejecución
+          }
+        }
       }
       
-      // Si está en proceso pero no completado, abortar
-      if (data.inProgress) {
-        logger.info(`Sorteo para el minuto ${currentMinute} ya está en proceso, abortando...`);
-        return { success: false, inProgress: true };
-      }
+      // Marcar este minuto como en proceso
+      transaction.set(drawControlRef, {
+        timestamp: FieldValue.serverTimestamp(),
+        inProgress: true,
+        startedAt: now.toISOString()
+      });
+      
+      return { success: true, alreadyProcessed: false };
+    });
+    
+    // Si ya está procesado o en progreso, retornar
+    if (result.alreadyProcessed) {
+      return result;
     }
     
-    // Marcar este minuto como en proceso
-    await drawControlRef.set({
-      timestamp: FieldValue.serverTimestamp(),
-      inProgress: true,
-      startedAt: now.toISOString()
-    });
+    if (!result.success) {
+      logger.info("Sorteo ya está siendo procesado por otra instancia, abortando...");
+      return { success: false };
+    }
     
     // 2. Generar números ganadores
     const winningNumbers = generateRandomEmojis(4);
@@ -247,6 +272,20 @@ const processGameDraw = async () => {
     return { success: true, resultId: gameResultId };
   } catch (error) {
     logger.error("Error procesando el sorteo:", error);
+    
+    // Marcar el documento de control como fallido para que pueda ser reintentado
+    try {
+      await drawControlRef.set({
+        timestamp: FieldValue.serverTimestamp(),
+        inProgress: false,
+        completed: false,
+        error: error.message,
+        errorAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (updateError) {
+      logger.error("Error actualizando documento de control tras fallo:", updateError);
+    }
+    
     return { success: false, error: error.message };
   }
 };
@@ -256,56 +295,50 @@ exports.scheduledGameDraw = onSchedule({
   schedule: "every 1 minutes",
   timeZone: "America/Mexico_City", // Ajusta a tu zona horaria
   retryConfig: {
-    maxRetryAttempts: 1, // Reducir a 1 intento
+    maxRetryAttempts: 3,
     minBackoffSeconds: 10
   },
-  maxInstances: 1, // Limitar a una sola instancia
-  concurrency: 1 // Garantizar que solo se ejecute una instancia a la vez
+  maxInstances: 1 // Asegurar que solo se ejecuta una instancia a la vez
 }, async (event) => {
   logger.info("Ejecutando sorteo programado:", event.jobName);
   
-  // Verificar si ya se procesó un sorteo para este minuto
+  // Verificar que no haya otra instancia ejecutándose
   const now = new Date();
   const currentMinute = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+  const lockRef = db.collection('scheduler_locks').doc(currentMinute);
   
-  // Verificar en una colección especial para control de sorteos
-  const drawControlRef = db.collection('draw_control').doc(currentMinute);
-  const drawControlDoc = await drawControlRef.get();
-  
-  if (drawControlDoc.exists) {
-    const data = drawControlDoc.data();
+  try {
+    // Intentar adquirir el bloqueo
+    const lockResult = await db.runTransaction(async (transaction) => {
+      const lockDoc = await transaction.get(lockRef);
+      
+      if (lockDoc.exists) {
+        logger.info(`Ya hay una instancia procesando el sorteo para el minuto ${currentMinute}`);
+        return false;
+      }
+      
+      transaction.set(lockRef, {
+        timestamp: FieldValue.serverTimestamp(),
+        jobName: event.jobName
+      });
+      
+      return true;
+    });
     
-    // Si ya está completado o en proceso, no hacer nada
-    if (data.completed || data.inProgress) {
-      logger.info(`Sorteo para el minuto ${currentMinute} ya está siendo procesado o completado, abortando...`);
+    if (!lockResult) {
+      logger.info("Abortando ejecución duplicada del sorteo programado");
       return;
     }
+    
+    // Ejecutar el sorteo
+    await processGameDraw();
+  } catch (error) {
+    logger.error("Error en scheduledGameDraw:", error);
   }
-  
-  await processGameDraw();
 });
 
 // Función Cloud que puede ser invocada manualmente (para pruebas o sorteos forzados)
 exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
   logger.info("Solicitud manual de sorteo recibida");
-  
-  // Verificar si ya se procesó un sorteo para este minuto
-  const now = new Date();
-  const currentMinute = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
-  
-  // Verificar en una colección especial para control de sorteos
-  const drawControlRef = db.collection('draw_control').doc(currentMinute);
-  const drawControlDoc = await drawControlRef.get();
-  
-  if (drawControlDoc.exists) {
-    const data = drawControlDoc.data();
-    
-    // Si ya está completado o en proceso, no hacer nada
-    if (data.completed || data.inProgress) {
-      logger.info(`Sorteo manual para el minuto ${currentMinute} ya está siendo procesado o completado, abortando...`);
-      return { success: false, message: "Ya existe un sorteo en proceso o completado para este minuto" };
-    }
-  }
-  
   return await processGameDraw();
 });

@@ -42,21 +42,10 @@ export function useGameState() {
 
   // Suscribirse a los resultados del juego en Firebase
   useEffect(() => {
-    // Mantener un registro del último resultado procesado
-    const lastResultRef = useRef<string | null>(null);
-    
     const unsubscribe = subscribeToGameResults((results) => {
       if (results.length > 0) {
         const latestResult = results[0]; // El primer resultado es el más reciente
-        
-        // Verificar si ya procesamos este resultado
-        if (lastResultRef.current === latestResult.id) {
-          console.log('Resultado ya procesado, ignorando:', latestResult.id);
-          return;
-        }
-        
         console.log('Nuevo resultado recibido de Firebase:', latestResult);
-        lastResultRef.current = latestResult.id;
         
         setGameState(prev => ({
           ...prev,
@@ -76,7 +65,9 @@ export function useGameState() {
 
   // Esta función se llama cuando termina el temporizador
   const onGameProcessed = useCallback(() => {
-    console.log('Temporizador terminado, solicitando nuevo sorteo...');
+    // No es necesario solicitar manualmente un nuevo sorteo
+    // El sorteo lo ejecuta automáticamente la Cloud Function cada minuto
+    console.log('Temporizador terminado, esperando próximo sorteo automático...');
   }, []);
 
   // Obtener el tiempo restante del temporizador

@@ -123,9 +123,6 @@ export const subscribeToGameResults = (
   callback: (results: GameResult[]) => void
 ) => {
   try {
-    // Mantener un registro del último resultado para evitar duplicados
-    let lastResultId = '';
-    
     const resultsQuery = query(
       collection(db, GAME_RESULTS_COLLECTION),
       orderBy('timestamp', 'desc'),
@@ -143,21 +140,7 @@ export const subscribeToGameResults = (
           }
         }).filter(result => result !== null) as GameResult[];
         
-        // Verificar si hay resultados y si el ID ha cambiado
-        if (results.length > 0) {
-          const latestResult = results[0];
-          
-          // Solo notificar si es un resultado nuevo
-          if (latestResult.id !== lastResultId) {
-            console.log('Nuevo resultado detectado con ID:', latestResult.id);
-            lastResultId = latestResult.id;
-            callback(results);
-          } else {
-            console.log('Resultado duplicado detectado, ignorando:', latestResult.id);
-          }
-        } else {
-          callback(results);
-        }
+        callback(results);
       } catch (error) {
         console.error('Error processing snapshot:', error);
         callback([]);

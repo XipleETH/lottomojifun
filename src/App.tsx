@@ -25,7 +25,6 @@ function App() {
   // Inicializar Firebase y SDK
   useEffect(() => {
     sdk.actions.ready();
-    // initializeGameState(); // Ya se está inicializando en main.tsx
   }, []);
 
   // Mostrar notificación cuando hay ganadores
