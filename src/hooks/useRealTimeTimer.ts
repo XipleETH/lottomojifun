@@ -4,6 +4,7 @@ export function useRealTimeTimer(onTimeEnd: () => void) {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const timerRef = useRef<NodeJS.Timeout>();
   const lastDrawRef = useRef<number>(0);
+  const processingRef = useRef<boolean>(false);
 
   useEffect(() => {
     const calculateNextDraw = () => {
@@ -22,10 +23,19 @@ export function useRealTimeTimer(onTimeEnd: () => void) {
       
       setTimeRemaining(remaining);
       
-      // Solo ejecutar onTimeEnd si estamos en un nuevo minuto y no hemos procesado este minuto
-      if (remaining === 0 && currentMinute !== lastDrawRef.current) {
+      // Solo ejecutar onTimeEnd si estamos en un nuevo minuto, no hemos procesado este minuto,
+      // y no estamos en medio de un procesamiento
+      if (remaining === 0 && currentMinute !== lastDrawRef.current && !processingRef.current) {
+        processingRef.current = true;
         lastDrawRef.current = currentMinute;
+        
+        // Ejecutar onTimeEnd y luego desbloquear el procesamiento después de un tiempo
         onTimeEnd();
+        
+        // Desbloquear el procesamiento después de 5 segundos para evitar múltiples ejecuciones
+        setTimeout(() => {
+          processingRef.current = false;
+        }, 5000);
       }
     };
 

@@ -113,7 +113,8 @@ export function useGameState() {
   const processGame = useCallback(() => {
     // Prevent duplicate processing within the same second
     const now = Date.now();
-    if (processingRef.current || (now - lastProcessedTimeRef.current) < 1000) {
+    if (processingRef.current || (now - lastProcessedTimeRef.current) < 5000) {
+      console.log('Evitando procesamiento duplicado, tiempo desde último proceso:', now - lastProcessedTimeRef.current, 'ms');
       return;
     }
 
@@ -199,10 +200,10 @@ export function useGameState() {
     } catch (error) {
       console.error('Error procesando el juego:', error);
     } finally {
-      // Reset processing flag after a short delay
+      // Reset processing flag after a longer delay
       setTimeout(() => {
         processingRef.current = false;
-      }, 1000);
+      }, 5000);
     }
   }, [gameState.tickets]);
 

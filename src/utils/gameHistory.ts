@@ -24,12 +24,15 @@ export const addGameResult = (result: GameResult) => {
   
   // Solo agregar si no existe un resultado para este minuto
   if (!gameHistoryMap.has(minuteKey)) {
+    console.log(`Añadiendo nuevo resultado para el minuto: ${minuteKey}`);
     gameHistoryMap.set(minuteKey, result);
     gameHistory = Array.from(gameHistoryMap.values())
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 100); // Mantener solo los últimos 100 juegos
     
     saveGameHistory(gameHistory);
+  } else {
+    console.log(`Resultado duplicado para el minuto: ${minuteKey}, ignorando`);
   }
 };
 
