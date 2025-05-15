@@ -24,17 +24,24 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
         
         const snapshot = await getDocs(historyQuery);
         const results: GameResult[] = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            timestamp: data.timestamp?.toMillis() || Date.now(),
-            winningNumbers: data.winningNumbers || [],
-            firstPrize: data.firstPrize || [],
-            secondPrize: data.secondPrize || [],
-            thirdPrize: data.thirdPrize || []
-          };
-        });
+          try {
+            const data = doc.data();
+            // Validar que los datos tengan la estructura esperada
+            return {
+              id: doc.id,
+              timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : Date.now(),
+              winningNumbers: Array.isArray(data.winningNumbers) ? data.winningNumbers : [],
+              firstPrize: Array.isArray(data.firstPrize) ? data.firstPrize : [],
+              secondPrize: Array.isArray(data.secondPrize) ? data.secondPrize : [],
+              thirdPrize: Array.isArray(data.thirdPrize) ? data.thirdPrize : []
+            };
+          } catch (error) {
+            console.error('Error mapping document in GameHistoryModal:', error, doc.id);
+            return null;
+          }
+        }).filter(result => result !== null) as GameResult[];
         
+        console.log('Fetched history results:', results.length);
         setHistory(results);
       } catch (error) {
         console.error('Error fetching game history:', error);

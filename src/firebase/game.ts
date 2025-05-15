@@ -104,38 +104,80 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
 export const subscribeToGameResults = (
   callback: (results: GameResult[]) => void
 ) => {
-  const resultsQuery = query(
-    collection(db, GAME_RESULTS_COLLECTION),
-    orderBy('timestamp', 'desc'),
-    limit(RESULTS_LIMIT)
-  );
-  
-  return onSnapshot(resultsQuery, (snapshot) => {
-    const results = snapshot.docs.map(mapFirestoreGameResult);
-    callback(results);
-  });
+  try {
+    const resultsQuery = query(
+      collection(db, GAME_RESULTS_COLLECTION),
+      orderBy('timestamp', 'desc'),
+      limit(RESULTS_LIMIT)
+    );
+    
+    return onSnapshot(resultsQuery, (snapshot) => {
+      try {
+        const results = snapshot.docs.map(doc => {
+          try {
+            return mapFirestoreGameResult(doc);
+          } catch (error) {
+            console.error('Error mapping document:', error, doc.id);
+            return null;
+          }
+        }).filter(result => result !== null) as GameResult[];
+        
+        callback(results);
+      } catch (error) {
+        console.error('Error processing snapshot:', error);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('Error in subscribeToGameResults:', error);
+      callback([]);
+    });
+  } catch (error) {
+    console.error('Error setting up game results subscription:', error);
+    return () => {}; // Unsubscribe no-op
+  }
 };
 
 // Suscribirse a los tickets del usuario actual
 export const subscribeToUserTickets = (
   callback: (tickets: Ticket[]) => void
 ) => {
-  const user = getCurrentUser();
-  if (!user) {
-    callback([]);
-    return () => {};
+  try {
+    const user = getCurrentUser();
+    if (!user) {
+      callback([]);
+      return () => {};
+    }
+    
+    const ticketsQuery = query(
+      collection(db, TICKETS_COLLECTION),
+      where('userId', '==', user.id),
+      orderBy('timestamp', 'desc')
+    );
+    
+    return onSnapshot(ticketsQuery, (snapshot) => {
+      try {
+        const tickets = snapshot.docs.map(doc => {
+          try {
+            return mapFirestoreTicket(doc);
+          } catch (error) {
+            console.error('Error mapping ticket document:', error, doc.id);
+            return null;
+          }
+        }).filter(ticket => ticket !== null) as Ticket[];
+        
+        callback(tickets);
+      } catch (error) {
+        console.error('Error processing tickets snapshot:', error);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('Error in subscribeToUserTickets:', error);
+      callback([]);
+    });
+  } catch (error) {
+    console.error('Error setting up user tickets subscription:', error);
+    return () => {}; // Unsubscribe no-op
   }
-  
-  const ticketsQuery = query(
-    collection(db, TICKETS_COLLECTION),
-    where('userId', '==', user.id),
-    orderBy('timestamp', 'desc')
-  );
-  
-  return onSnapshot(ticketsQuery, (snapshot) => {
-    const tickets = snapshot.docs.map(mapFirestoreTicket);
-    callback(tickets);
-  });
 };
 
 // Suscribirse al estado actual del juego
