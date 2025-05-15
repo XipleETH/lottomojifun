@@ -6,6 +6,7 @@ export function useRealTimeTimer(onTimeEnd: () => void) {
   const timerRef = useRef<NodeJS.Timeout>();
   const lastMinuteRef = useRef<number>(-1);
   const processingRef = useRef<boolean>(false);
+  const lastProcessedTimeRef = useRef<number>(0);
 
   useEffect(() => {
     // Suscribirse a los cambios de estado del juego desde Firebase
@@ -17,9 +18,24 @@ export function useRealTimeTimer(onTimeEnd: () => void) {
       
       // Detectar cambio de minuto para notificar al componente padre
       const currentMinute = new Date().getMinutes();
-      if (remaining === 0 && currentMinute !== lastMinuteRef.current && !processingRef.current) {
+      const currentTime = now;
+      
+      // Solo procesar si:
+      // 1. El tiempo restante es 0
+      // 2. El minuto actual es diferente al último procesado
+      // 3. No estamos ya procesando un evento
+      // 4. Han pasado al menos 30 segundos desde el último procesamiento
+      if (
+        remaining === 0 && 
+        currentMinute !== lastMinuteRef.current && 
+        !processingRef.current &&
+        (currentTime - lastProcessedTimeRef.current) > 30000
+      ) {
         lastMinuteRef.current = currentMinute;
         processingRef.current = true;
+        lastProcessedTimeRef.current = currentTime;
+        
+        console.log(`[${new Date().toLocaleTimeString()}] Detectado cambio de minuto, notificando fin de temporizador`);
         
         // Añadir un pequeño retraso para evitar múltiples llamadas
         setTimeout(() => {

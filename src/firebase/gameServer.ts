@@ -10,7 +10,8 @@ import {
   Timestamp,
   orderBy,
   limit,
-  onSnapshot
+  onSnapshot,
+  getDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
@@ -66,6 +67,24 @@ export const subscribeToGameState = (callback: (nextDrawTime: number, winningNum
 // Inicializar el estado del juego si no existe
 export const initializeGameState = async (): Promise<void> => {
   try {
+    // Primero verificar si ya existe un estado del juego válido
+    const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
+    const stateDoc = await getDoc(stateDocRef);
+    const now = new Date();
+    
+    // Si existe un documento y tiene un tiempo de sorteo futuro válido, no hacer nada
+    if (stateDoc.exists()) {
+      const data = stateDoc.data();
+      const nextDrawTime = data.nextDrawTime?.toMillis() || 0;
+      
+      if (nextDrawTime > now.getTime()) {
+        console.log('Estado del juego ya inicializado con un tiempo de sorteo válido:', new Date(nextDrawTime).toLocaleTimeString());
+        return;
+      }
+    }
+    
+    // Si no existe o el tiempo ya pasó, continuar con la inicialización
+    
     // 1. Obtener el último resultado del juego
     const resultsQuery = query(
       collection(db, GAME_RESULTS_COLLECTION),
@@ -84,7 +103,6 @@ export const initializeGameState = async (): Promise<void> => {
     }
     
     // 2. Calcular próximo sorteo
-    const now = new Date();
     const nextMinute = new Date(now);
     nextMinute.setMinutes(now.getMinutes() + 1);
     nextMinute.setSeconds(0);

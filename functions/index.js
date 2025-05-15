@@ -308,6 +308,18 @@ exports.scheduledGameDraw = onSchedule({
   const lockRef = db.collection('scheduler_locks').doc(currentMinute);
   
   try {
+    // Verificar primero si ya existe un resultado para este minuto
+    const drawControlRef = db.collection('draw_control').doc(currentMinute);
+    const drawControlDoc = await drawControlRef.get();
+    
+    if (drawControlDoc.exists) {
+      const data = drawControlDoc.data();
+      if (data.completed) {
+        logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute} con ID: ${data.resultId}`);
+        return;
+      }
+    }
+    
     // Intentar adquirir el bloqueo
     const lockResult = await db.runTransaction(async (transaction) => {
       const lockDoc = await transaction.get(lockRef);
@@ -319,7 +331,8 @@ exports.scheduledGameDraw = onSchedule({
       
       transaction.set(lockRef, {
         timestamp: FieldValue.serverTimestamp(),
-        jobName: event.jobName
+        jobName: event.jobName,
+        startedAt: now.toISOString()
       });
       
       return true;
@@ -332,8 +345,24 @@ exports.scheduledGameDraw = onSchedule({
     
     // Ejecutar el sorteo
     await processGameDraw();
+    
+    // Actualizar el bloqueo como completado
+    await lockRef.update({
+      completed: true,
+      completedAt: new Date().toISOString()
+    });
   } catch (error) {
     logger.error("Error en scheduledGameDraw:", error);
+    
+    // Marcar el bloqueo como fallido
+    try {
+      await lockRef.update({
+        error: error.message,
+        errorAt: new Date().toISOString()
+      });
+    } catch (updateError) {
+      logger.error("Error actualizando bloqueo tras fallo:", updateError);
+    }
   }
 });
 
