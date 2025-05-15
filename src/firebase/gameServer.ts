@@ -67,6 +67,8 @@ export const subscribeToGameState = (callback: (nextDrawTime: number, winningNum
 // Inicializar el estado del juego si no existe
 export const initializeGameState = async (): Promise<void> => {
   try {
+    console.log('[initializeGameState] Verificando estado del juego...');
+    
     // Primero verificar si ya existe un estado del juego válido
     const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
     const stateDoc = await getDoc(stateDocRef);
@@ -78,12 +80,19 @@ export const initializeGameState = async (): Promise<void> => {
       const nextDrawTime = data.nextDrawTime?.toMillis() || 0;
       
       if (nextDrawTime > now.getTime()) {
-        console.log('Estado del juego ya inicializado con un tiempo de sorteo válido:', new Date(nextDrawTime).toLocaleTimeString());
+        const timeRemaining = Math.floor((nextDrawTime - now.getTime()) / 1000);
+        console.log(`[initializeGameState] Estado del juego ya inicializado con un tiempo de sorteo válido (en ${timeRemaining}s):`, new Date(nextDrawTime).toLocaleTimeString());
         return;
+      } else {
+        console.log('[initializeGameState] El tiempo de sorteo existente ya pasó, calculando nuevo tiempo');
       }
+    } else {
+      console.log('[initializeGameState] No se encontró un estado del juego, creando uno nuevo');
     }
     
-    // Si no existe o el tiempo ya pasó, continuar con la inicialización
+    // IMPORTANTE: En lugar de actualizar el estado del juego directamente,
+    // solo verificar si hay resultados recientes y esperar a que la función
+    // programada en Firebase Functions actualice el estado
     
     // 1. Obtener el último resultado del juego
     const resultsQuery = query(
@@ -94,29 +103,42 @@ export const initializeGameState = async (): Promise<void> => {
     
     const snapshot = await getDocs(resultsQuery);
     let lastWinningNumbers: string[] = [];
+    let shouldUpdateState = true;
     
     if (!snapshot.empty) {
       const latestDoc = snapshot.docs[0];
       const data = latestDoc.data();
       lastWinningNumbers = data.winningNumbers || [];
-      console.log('Últimos números ganadores encontrados:', lastWinningNumbers);
+      
+      // Verificar si el resultado es reciente (menos de 2 minutos)
+      const resultTime = data.timestamp?.toMillis() || 0;
+      if (resultTime > 0 && (now.getTime() - resultTime) < 120000) {
+        console.log('[initializeGameState] Se encontró un resultado reciente, no es necesario actualizar el estado');
+        shouldUpdateState = false;
+      } else {
+        console.log('[initializeGameState] Últimos números ganadores encontrados:', lastWinningNumbers);
+      }
     }
     
-    // 2. Calcular próximo sorteo
-    const nextMinute = new Date(now);
-    nextMinute.setMinutes(now.getMinutes() + 1);
-    nextMinute.setSeconds(0);
-    nextMinute.setMilliseconds(0);
-    
-    // 3. Actualizar estado del juego con los últimos números ganadores
-    await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
-      winningNumbers: lastWinningNumbers,
-      nextDrawTime: Timestamp.fromDate(nextMinute),
-      lastUpdated: serverTimestamp()
-    }, { merge: true });
-    
-    console.log('Estado del juego inicializado con el próximo sorteo a las:', nextMinute.toLocaleTimeString());
+    // Solo actualizar el estado si es necesario
+    if (shouldUpdateState) {
+      // 2. Calcular próximo sorteo
+      const nextMinute = new Date(now);
+      nextMinute.setMinutes(now.getMinutes() + 1);
+      nextMinute.setSeconds(0);
+      nextMinute.setMilliseconds(0);
+      
+      // 3. Actualizar estado del juego con los últimos números ganadores
+      await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
+        winningNumbers: lastWinningNumbers,
+        nextDrawTime: Timestamp.fromDate(nextMinute),
+        lastUpdated: serverTimestamp(),
+        source: 'client-init'
+      }, { merge: true });
+      
+      console.log('[initializeGameState] Estado del juego inicializado con el próximo sorteo a las:', nextMinute.toLocaleTimeString());
+    }
   } catch (error) {
-    console.error('Error al inicializar el estado del juego:', error);
+    console.error('[initializeGameState] Error al inicializar el estado del juego:', error);
   }
 }; 

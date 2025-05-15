@@ -67,7 +67,10 @@ export function useGameState() {
   const onGameProcessed = useCallback(() => {
     // No es necesario solicitar manualmente un nuevo sorteo
     // El sorteo lo ejecuta automáticamente la Cloud Function cada minuto
-    console.log('Temporizador terminado, esperando próximo sorteo automático...');
+    console.log('[useGameState] Temporizador terminado, esperando próximo sorteo automático...');
+    
+    // IMPORTANTE: NO hacer nada aquí que pueda desencadenar un sorteo
+    // Solo registrar que el temporizador ha terminado
   }, []);
 
   // Obtener el tiempo restante del temporizador
