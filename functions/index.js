@@ -101,13 +101,40 @@ const processGameDraw = async () => {
     // Verificar en una colección especial para control de sorteos
     const drawControlRef = db.collection('draw_control').doc(currentMinute);
     
+    // Verificar primero si ya existe un documento completado para este minuto
+    const drawControlDoc = await drawControlRef.get();
+    if (drawControlDoc.exists) {
+      const data = drawControlDoc.data();
+      
+      // Si ya está completado, retornar el ID del resultado
+      if (data.completed) {
+        logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute} con ID: ${data.resultId}`);
+        return { success: true, alreadyProcessed: true, resultId: data.resultId };
+      }
+      
+      // Si está en proceso pero no completado y ha pasado poco tiempo, esperar
+      if (data.inProgress) {
+        const startedAt = data.startedAt ? new Date(data.startedAt) : new Date(0);
+        const elapsedMs = now.getTime() - startedAt.getTime();
+        
+        // Si ha pasado menos de 30 segundos, considerar que otra instancia está procesando
+        if (elapsedMs < 30000) {
+          logger.info(`Sorteo para el minuto ${currentMinute} en proceso (iniciado hace ${elapsedMs}ms), abortando...`);
+          return { success: false, inProgress: true };
+        }
+        
+        // Si ha pasado más tiempo, asumir que la otra instancia falló y continuar
+        logger.warn(`Sorteo para el minuto ${currentMinute} en proceso por más de 30 segundos, asumiendo fallo y continuando...`);
+      }
+    }
+    
     // Usar transacción para evitar condiciones de carrera
     const result = await db.runTransaction(async (transaction) => {
-      const drawControlDoc = await transaction.get(drawControlRef);
+      const freshDrawControlDoc = await transaction.get(drawControlRef);
       
-      // Si ya existe un documento para este minuto, otro proceso ya está manejando este sorteo
-      if (drawControlDoc.exists) {
-        const data = drawControlDoc.data();
+      // Verificar nuevamente dentro de la transacción
+      if (freshDrawControlDoc.exists) {
+        const data = freshDrawControlDoc.data();
         
         // Si ya está completado, retornar el ID del resultado
         if (data.completed) {
@@ -272,9 +299,10 @@ exports.scheduledGameDraw = onSchedule({
   schedule: "every 1 minutes",
   timeZone: "America/Mexico_City", // Ajusta a tu zona horaria
   retryConfig: {
-    maxRetryAttempts: 3,
+    maxRetryAttempts: 1, // Reducir a 1 intento
     minBackoffSeconds: 10
-  }
+  },
+  maxInstances: 1 // Limitar a una sola instancia
 }, async (event) => {
   logger.info("Ejecutando sorteo programado:", event.jobName);
   await processGameDraw();

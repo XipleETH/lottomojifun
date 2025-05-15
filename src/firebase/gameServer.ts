@@ -10,7 +10,8 @@ import {
   Timestamp,
   orderBy,
   limit,
-  onSnapshot
+  onSnapshot,
+  getDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
@@ -39,6 +40,10 @@ export const requestManualGameDraw = async (): Promise<boolean> => {
 export const subscribeToGameState = (callback: (nextDrawTime: number, winningNumbers: string[]) => void) => {
   const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
   
+  // Mantener un registro del último estado para evitar actualizaciones duplicadas
+  let lastNextDrawTime = 0;
+  let lastWinningNumbersStr = '';
+  
   return onSnapshot(stateDocRef, (snapshot) => {
     const data = snapshot.data() || {};
     const now = Date.now();
@@ -57,15 +62,45 @@ export const subscribeToGameState = (callback: (nextDrawTime: number, winningNum
     
     // Obtener los números ganadores actuales
     const winningNumbers = data.winningNumbers || [];
+    const winningNumbersStr = JSON.stringify(winningNumbers);
     
-    // Llamar al callback con el tiempo restante y los números ganadores
-    callback(nextDrawTime, winningNumbers);
+    // Solo llamar al callback si los datos han cambiado
+    if (nextDrawTime !== lastNextDrawTime || winningNumbersStr !== lastWinningNumbersStr) {
+      console.log('Estado del juego actualizado:', {
+        nextDrawTime: new Date(nextDrawTime).toLocaleTimeString(),
+        winningNumbers
+      });
+      
+      // Actualizar los valores de la última actualización
+      lastNextDrawTime = nextDrawTime;
+      lastWinningNumbersStr = winningNumbersStr;
+      
+      // Llamar al callback con el tiempo restante y los números ganadores
+      callback(nextDrawTime, winningNumbers);
+    }
   });
 };
 
 // Inicializar el estado del juego si no existe
 export const initializeGameState = async (): Promise<void> => {
   try {
+    console.log('Iniciando inicialización del estado del juego...');
+    
+    // Verificar si ya existe un estado del juego
+    const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
+    const stateDoc = await getDoc(stateDocRef);
+    
+    if (stateDoc.exists()) {
+      const data = stateDoc.data();
+      const nextDrawTime = data.nextDrawTime?.toMillis() || 0;
+      
+      // Si ya existe un estado con un tiempo futuro, no hacer nada
+      if (nextDrawTime > Date.now()) {
+        console.log('Estado del juego ya inicializado con tiempo válido:', new Date(nextDrawTime).toLocaleTimeString());
+        return;
+      }
+    }
+    
     // 1. Obtener el último resultado del juego
     const resultsQuery = query(
       collection(db, GAME_RESULTS_COLLECTION),
