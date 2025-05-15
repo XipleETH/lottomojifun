@@ -6,7 +6,7 @@ import {
   subscribeToCurrentGameState,
   subscribeToGameResults
 } from '../firebase/game';
-import { checkAndProcessGameDraw } from '../firebase/gameServer';
+import { checkAndProcessGameDraw, processGameDraw } from '../firebase/gameServer';
 import { useAuth } from '../components/AuthProvider';
 
 const MAX_TICKETS = 10;
@@ -21,18 +21,18 @@ const initialGameState: GameState = {
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
-  const timerIntervalRef = useRef<number | null>(null);
   const { user } = useAuth();
 
   // Verificar si es hora de un nuevo sorteo
   useEffect(() => {
     const checkDraw = async () => {
-      await checkAndProcessGameDraw();
+      const processed = await checkAndProcessGameDraw();
+      console.log("Verificación de sorteo:", processed ? "Procesado" : "No necesario");
     };
     
-    // Verificar al inicio y cada 10 segundos
+    // Verificar al inicio y cada 5 segundos
     checkDraw();
-    const interval = setInterval(checkDraw, 10000);
+    const interval = setInterval(checkDraw, 5000);
     
     return () => clearInterval(interval);
   }, []);
@@ -43,7 +43,7 @@ export function useGameState() {
     
     console.log("Suscribiéndose a tickets del usuario:", user.id);
     const unsubscribe = subscribeToUserTickets((tickets) => {
-      console.log("Tickets recibidos:", tickets);
+      console.log("Tickets recibidos:", tickets.length);
       setGameState(prev => ({
         ...prev,
         tickets
@@ -53,40 +53,28 @@ export function useGameState() {
     return () => unsubscribe();
   }, [user]);
 
-  // Suscribirse al estado actual del juego y actualizar el contador
+  // Suscribirse al estado actual del juego
   useEffect(() => {
     console.log("Suscribiéndose al estado del juego");
     const unsubscribe = subscribeToCurrentGameState((winningNumbers, remainingTime) => {
-      console.log("Estado del juego actualizado:", { winningNumbers, remainingTime });
+      console.log("Estado del juego actualizado:", { winningNumbers, remainingSeconds: remainingTime });
+      
       setGameState(prev => ({
         ...prev,
         winningNumbers
       }));
+      
       setTimeRemaining(remainingTime);
       
-      // Actualizar el contador cada segundo
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
+      // Si el contador llega a cero, verificar si es hora de un sorteo
+      if (remainingTime <= 0) {
+        console.log("Contador llegó a cero, verificando sorteo...");
+        checkAndProcessGameDraw();
       }
-      
-      timerIntervalRef.current = window.setInterval(() => {
-        setTimeRemaining(prev => {
-          const newTime = prev - 1;
-          if (newTime <= 0) {
-            // Si llegamos a cero, verificar si es hora de un nuevo sorteo
-            checkAndProcessGameDraw();
-            return 0;
-          }
-          return newTime;
-        });
-      }, 1000);
     });
 
     return () => {
       unsubscribe();
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
     };
   }, []);
 

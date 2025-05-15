@@ -156,15 +156,70 @@ export const subscribeToCurrentGameState = (
 ) => {
   const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
   
-  return onSnapshot(stateDocRef, (snapshot) => {
+  // Función para calcular el tiempo restante
+  const calculateTimeRemaining = (nextDrawTime: number): number => {
+    const now = Date.now();
+    const diff = nextDrawTime - now;
+    // Asegurar que el tiempo restante sea entre 0 y 60 segundos
+    return Math.max(0, Math.min(60, Math.floor(diff / 1000)));
+  };
+  
+  // Actualizar el tiempo restante cada segundo
+  let clientInterval: number | null = null;
+  let lastNextDrawTime: number = 0;
+  
+  const setupInterval = (nextDrawTime: number) => {
+    // Limpiar intervalo anterior si existe
+    if (clientInterval) {
+      clearInterval(clientInterval);
+    }
+    
+    lastNextDrawTime = nextDrawTime;
+    
+    // Calcular tiempo restante inicial
+    let remainingTime = calculateTimeRemaining(nextDrawTime);
+    callback([], remainingTime);
+    
+    // Actualizar cada segundo
+    clientInterval = window.setInterval(() => {
+      remainingTime = calculateTimeRemaining(nextDrawTime);
+      callback([], remainingTime);
+      
+      // Si llegamos a cero, no necesitamos seguir actualizando
+      if (remainingTime <= 0 && clientInterval) {
+        clearInterval(clientInterval);
+        clientInterval = null;
+      }
+    }, 1000);
+  };
+  
+  // Suscribirse a cambios en Firestore
+  const unsubscribe = onSnapshot(stateDocRef, (snapshot) => {
     const data = snapshot.data() || {};
     const winningNumbers = data.winningNumbers || [];
     const nextDrawTime = data.nextDrawTime?.toMillis() || Date.now() + 60000;
-    const timeRemaining = Math.max(0, Math.floor((nextDrawTime - Date.now()) / 1000));
     
+    // Solo configurar un nuevo intervalo si el tiempo de sorteo ha cambiado
+    if (nextDrawTime !== lastNextDrawTime) {
+      setupInterval(nextDrawTime);
+    }
+    
+    // Notificar con los números ganadores y el tiempo restante actual
+    const timeRemaining = calculateTimeRemaining(nextDrawTime);
     callback(winningNumbers, timeRemaining);
+    
+    console.log(`Estado del juego actualizado: ${winningNumbers.join(' ')} - Próximo sorteo en ${timeRemaining} segundos`);
   }, (error) => {
     console.error('Error subscribing to game state:', error);
     callback([], 60);
   });
+  
+  // Función de limpieza
+  return () => {
+    unsubscribe();
+    if (clientInterval) {
+      clearInterval(clientInterval);
+      clientInterval = null;
+    }
+  };
 }; 

@@ -28,7 +28,7 @@ export const processGameDraw = async (): Promise<void> => {
     // 1. Generar números ganadores
     const winningNumbers = generateRandomEmojis(4);
     
-    // 2. Calcular próximo sorteo
+    // 2. Calcular próximo sorteo - asegurar que sea exactamente 60 segundos desde ahora
     const now = new Date();
     const nextDrawTime = new Date(now.getTime() + DRAW_INTERVAL_MS);
     
@@ -48,6 +48,8 @@ export const processGameDraw = async (): Promise<void> => {
       userId: doc.data().userId
     }));
     
+    console.log(`Procesando ${tickets.length} tickets para el sorteo`);
+    
     // 5. Comprobar ganadores
     const results = {
       firstPrize: [] as Ticket[],
@@ -58,9 +60,18 @@ export const processGameDraw = async (): Promise<void> => {
     tickets.forEach(ticket => {
       if (!ticket?.numbers) return;
       const winStatus = checkWin(ticket.numbers, winningNumbers);
-      if (winStatus.firstPrize) results.firstPrize.push(ticket);
-      else if (winStatus.secondPrize) results.secondPrize.push(ticket);
-      else if (winStatus.thirdPrize) results.thirdPrize.push(ticket);
+      if (winStatus.firstPrize) {
+        console.log(`¡Ticket ganador de primer premio! ID: ${ticket.id}`);
+        results.firstPrize.push(ticket);
+      }
+      else if (winStatus.secondPrize) {
+        console.log(`¡Ticket ganador de segundo premio! ID: ${ticket.id}`);
+        results.secondPrize.push(ticket);
+      }
+      else if (winStatus.thirdPrize) {
+        console.log(`¡Ticket ganador de tercer premio! ID: ${ticket.id}`);
+        results.thirdPrize.push(ticket);
+      }
     });
     
     // 6. Guardar resultado
@@ -74,6 +85,7 @@ export const processGameDraw = async (): Promise<void> => {
     await setDoc(doc(db, GAME_RESULTS_COLLECTION, gameResult.id), gameResult);
     
     console.log('Game draw processed successfully:', gameResult);
+    console.log(`Próximo sorteo a las: ${nextDrawTime.toLocaleTimeString()}`);
   } catch (error) {
     console.error('Error processing game draw:', error);
   }
@@ -97,9 +109,10 @@ export const initializeGameState = async (): Promise<void> => {
         lastUpdated: serverTimestamp()
       }, { merge: true });
       
-      console.log('Game state initialized with next draw at:', nextDrawTime);
+      console.log('Game state initialized with next draw at:', nextDrawTime.toLocaleTimeString());
     } else {
-      console.log('Game state already exists with next draw at:', stateDoc.data()?.nextDrawTime?.toDate());
+      const nextDrawTime = new Date(stateDoc.data()?.nextDrawTime?.toMillis());
+      console.log('Game state already exists with next draw at:', nextDrawTime.toLocaleTimeString());
     }
   } catch (error) {
     console.error('Error initializing game state:', error);
@@ -113,15 +126,20 @@ export const checkAndProcessGameDraw = async (): Promise<boolean> => {
     const stateDoc = await getDoc(stateRef);
     
     if (!stateDoc.exists()) {
+      console.log('No existe estado del juego, inicializando...');
       await initializeGameState();
       return false;
     }
     
     const nextDrawTime = stateDoc.data()?.nextDrawTime?.toMillis() || 0;
     const now = Date.now();
+    const timeRemaining = Math.floor((nextDrawTime - now) / 1000);
+    
+    console.log(`Tiempo restante para el próximo sorteo: ${timeRemaining} segundos`);
     
     // Si ya pasó el tiempo del sorteo, procesarlo
     if (nextDrawTime <= now) {
+      console.log('Es hora del sorteo, procesando...');
       await processGameDraw();
       return true;
     }
