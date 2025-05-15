@@ -57,7 +57,7 @@ export const subscribeToChatMessages = (
   );
   
   return onSnapshot(messagesQuery, (snapshot) => {
-    const messages = snapshot.docs.map(mapFirestoreMessage).reverse();
+    const messages = snapshot.docs.map(mapFirestoreMessage);
     callback(messages);
   });
 }; 

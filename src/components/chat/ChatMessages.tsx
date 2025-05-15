@@ -6,14 +6,18 @@ interface ChatMessagesProps {
 }
 
 export const ChatMessages: React.FC<ChatMessagesProps> = ({ messages }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesStartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Mantener el scroll en la parte superior para ver los nuevos mensajes
+    if (messagesStartRef.current) {
+      messagesStartRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-3">
+    <div className="flex-1 overflow-y-auto p-3 flex flex-col-reverse">
+      <div ref={messagesStartRef} />
       {messages.map((message) => (
         <div
           key={message.id}
@@ -34,7 +38,6 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({ messages }) => {
           </div>
         </div>
       ))}
-      <div ref={messagesEndRef} />
     </div>
   );
 };
