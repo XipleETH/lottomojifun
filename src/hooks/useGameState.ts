@@ -1,8 +1,11 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { GameState, Ticket, GameResult } from '../types';
-import { checkWin, generateRandomEmojis } from '../utils/gameLogic';
-import { addGameResult } from '../utils/gameHistory';
-import { useRealTimeTimer } from './useRealTimeTimer';
+import { 
+  generateTicket as generateFirebaseTicket, 
+  subscribeToUserTickets,
+  subscribeToCurrentGameState,
+  subscribeToGameResults
+} from '../firebase/game';
 
 const MAX_TICKETS = 10;
 
@@ -15,76 +18,56 @@ const initialGameState: GameState = {
 
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
-  const processingRef = useRef(false);
-  const lastProcessedTimeRef = useRef<number>(0);
+  const [timeRemaining, setTimeRemaining] = useState<number>(60);
 
-  const processGame = useCallback(() => {
-    // Prevent duplicate processing within the same second
-    const now = Date.now();
-    if (processingRef.current || (now - lastProcessedTimeRef.current) < 1000) {
-      return;
-    }
+  // Suscribirse a los tickets del usuario
+  useEffect(() => {
+    const unsubscribe = subscribeToUserTickets((tickets) => {
+      setGameState(prev => ({
+        ...prev,
+        tickets
+      }));
+    });
 
-    processingRef.current = true;
-    lastProcessedTimeRef.current = now;
-
-    try {
-      const winning = generateRandomEmojis(4);
-      const results = {
-        firstPrize: [] as Ticket[],
-        secondPrize: [] as Ticket[],
-        thirdPrize: [] as Ticket[]
-      };
-
-      setGameState(prevState => {
-        const currentTickets = prevState.tickets || [];
-        currentTickets.forEach(ticket => {
-          if (!ticket?.numbers) return;
-          const winStatus = checkWin(ticket.numbers, winning);
-          if (winStatus.firstPrize) results.firstPrize.push(ticket);
-          else if (winStatus.secondPrize) results.secondPrize.push(ticket);
-          else if (winStatus.thirdPrize) results.thirdPrize.push(ticket);
-        });
-
-        const gameResult: GameResult = {
-          id: crypto.randomUUID(),
-          timestamp: now,
-          winningNumbers: winning,
-          ...results
-        };
-        
-        // Add result to history
-        addGameResult(gameResult);
-
-        return {
-          ...initialGameState,
-          winningNumbers: winning,
-          lastResults: results,
-        };
-      });
-    } finally {
-      // Reset processing flag after a short delay
-      setTimeout(() => {
-        processingRef.current = false;
-      }, 1000);
-    }
+    return () => unsubscribe();
   }, []);
 
-  const timeRemaining = useRealTimeTimer(processGame);
+  // Suscribirse al estado actual del juego
+  useEffect(() => {
+    const unsubscribe = subscribeToCurrentGameState((winningNumbers, timeRemaining) => {
+      setGameState(prev => ({
+        ...prev,
+        winningNumbers
+      }));
+      setTimeRemaining(timeRemaining);
+    });
 
-  const generateTicket = useCallback((numbers: string[]) => {
+    return () => unsubscribe();
+  }, []);
+
+  // Suscribirse a los resultados del juego
+  useEffect(() => {
+    const unsubscribe = subscribeToGameResults((results) => {
+      if (results.length > 0) {
+        const latestResult = results[0];
+        setGameState(prev => ({
+          ...prev,
+          lastResults: {
+            firstPrize: latestResult.firstPrize,
+            secondPrize: latestResult.secondPrize,
+            thirdPrize: latestResult.thirdPrize
+          }
+        }));
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const generateTicket = useCallback(async (numbers: string[]) => {
     if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) return;
     
-    const newTicket: Ticket = {
-      id: crypto.randomUUID(),
-      numbers,
-      timestamp: Date.now()
-    };
-
-    setGameState(prev => ({
-      ...prev,
-      tickets: [...(prev.tickets || []), newTicket]
-    }));
+    await generateFirebaseTicket(numbers);
   }, [gameState.tickets.length]);
 
   return {

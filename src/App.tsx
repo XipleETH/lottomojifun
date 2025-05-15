@@ -4,19 +4,32 @@ import { Ticket as TicketComponent } from './components/Ticket';
 import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
-import { Trophy } from 'lucide-react';
+import { Trophy, UserCircle } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
+import { useAuth } from './components/AuthProvider';
+import { initializeGameState, processGameDraw } from './firebase/gameServer';
 
 function App() {
   const { gameState, generateTicket } = useGameState();
   const { context } = useMiniKit();
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
+  const { user, isLoading } = useAuth();
 
+  // Inicializar Firebase y SDK
   useEffect(() => {
     sdk.actions.ready();
+    initializeGameState();
+    
+    // Solo para desarrollo - simular sorteo cada minuto
+    // En producción, esto se haría con Cloud Functions
+    const interval = setInterval(() => {
+      processGameDraw();
+    }, 60000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleWin = async () => {
@@ -32,6 +45,14 @@ function App() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+        <div className="text-white text-2xl">Cargando...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500">
       <div className="container mx-auto px-4 py-8">
@@ -39,14 +60,22 @@ function App() {
           <h1 className="text-4xl md:text-6xl font-bold text-white">
             🎰 LottoMoji 🎲
           </h1>
-          {context?.client.added && (
-            <button
-              onClick={() => viewProfile()}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              View Profile
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {user && (
+              <div className="bg-white/20 px-4 py-2 rounded-lg text-white flex items-center">
+                <UserCircle className="mr-2" size={18} />
+                <span>{user.username}</span>
+              </div>
+            )}
+            {context?.client.added && (
+              <button
+                onClick={() => viewProfile()}
+                className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                View Profile
+              </button>
+            )}
+          </div>
         </div>
         
           <p className="text-white/90 text-xl mb-4">

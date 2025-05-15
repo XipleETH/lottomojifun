@@ -19,8 +19,13 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({ messages }) => {
           key={message.id}
           className="mb-2 bg-gray-50 rounded-lg p-2"
         >
-          <div className="text-xs text-gray-500 mb-1">
-            {new Date(message.timestamp).toLocaleTimeString()}
+          <div className="flex justify-between items-center text-xs text-gray-500 mb-1">
+            <span className="font-medium">
+              {message.username || 'Anónimo'}
+            </span>
+            <span>
+              {new Date(message.timestamp).toLocaleTimeString()}
+            </span>
           </div>
           <div className="flex flex-wrap gap-1">
             {message.emojis.map((emoji, index) => (
