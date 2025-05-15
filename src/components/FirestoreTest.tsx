@@ -6,6 +6,9 @@ export const FirestoreTest: React.FC = () => {
   const [testResults, setTestResults] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Usamos una colección de prueba diferente para no interferir con los resultados reales
+  const TEST_COLLECTION = "test_game_results";
+
   const runTests = async () => {
     setIsLoading(true);
     setTestResults([]);
@@ -42,8 +45,8 @@ export const FirestoreTest: React.FC = () => {
         setTestResults(prev => [...prev, `❌ Error de lectura: ${error.message}`]);
       }
       
-      // Prueba 4: Intentar leer documentos de game_results
-      setTestResults(prev => [...prev, "4. Intentando leer documentos de game_results..."]);
+      // Prueba 4: Intentar leer documentos de game_results (solo lectura)
+      setTestResults(prev => [...prev, "4. Intentando leer documentos de game_results (solo lectura)..."]);
       try {
         const querySnapshot = await getDocs(query(
           collection(db, "game_results"),
@@ -54,36 +57,37 @@ export const FirestoreTest: React.FC = () => {
         setTestResults(prev => [...prev, `❌ Error al leer game_results: ${error.message}`]);
       }
       
-      // Prueba 5: Intentar escribir un documento de prueba en game_results con addDoc
-      setTestResults(prev => [...prev, "5. Intentando escribir un documento de prueba en game_results con addDoc..."]);
+      // Prueba 5: Intentar escribir un documento de prueba en TEST_COLLECTION con addDoc
+      setTestResults(prev => [...prev, `5. Intentando escribir un documento de prueba en ${TEST_COLLECTION} con addDoc...`]);
       const gameResultTest = {
         timestamp: new Date().toISOString(),
         winningNumbers: ["🍎", "🍊", "🍋", "🍉"],
         firstPrize: [],
         secondPrize: [],
-        thirdPrize: []
+        thirdPrize: [],
+        testMode: true
       };
       
       try {
-        const docRef = await addDoc(collection(db, "game_results"), gameResultTest);
-        setTestResults(prev => [...prev, `✅ Escritura en game_results exitosa! ID: ${docRef.id}`]);
+        const docRef = await addDoc(collection(db, TEST_COLLECTION), gameResultTest);
+        setTestResults(prev => [...prev, `✅ Escritura en ${TEST_COLLECTION} exitosa! ID: ${docRef.id}`]);
       } catch (error: any) {
-        setTestResults(prev => [...prev, `❌ Error al escribir en game_results con addDoc: ${error.message}`]);
+        setTestResults(prev => [...prev, `❌ Error al escribir en ${TEST_COLLECTION} con addDoc: ${error.message}`]);
       }
       
-      // Prueba 6: Intentar escribir un documento de prueba en game_results con setDoc
-      setTestResults(prev => [...prev, "6. Intentando escribir un documento de prueba en game_results con setDoc..."]);
+      // Prueba 6: Intentar escribir un documento de prueba en TEST_COLLECTION con setDoc
+      setTestResults(prev => [...prev, `6. Intentando escribir un documento de prueba en ${TEST_COLLECTION} con setDoc...`]);
       
       try {
         const docId = `test-${Date.now()}`;
-        await setDoc(doc(db, "game_results", docId), gameResultTest);
-        setTestResults(prev => [...prev, `✅ Escritura en game_results con setDoc exitosa! ID: ${docId}`]);
+        await setDoc(doc(db, TEST_COLLECTION, docId), gameResultTest);
+        setTestResults(prev => [...prev, `✅ Escritura en ${TEST_COLLECTION} con setDoc exitosa! ID: ${docId}`]);
       } catch (error: any) {
-        setTestResults(prev => [...prev, `❌ Error al escribir en game_results con setDoc: ${error.message}`]);
+        setTestResults(prev => [...prev, `❌ Error al escribir en ${TEST_COLLECTION} con setDoc: ${error.message}`]);
       }
       
       // Prueba 7: Intentar escribir con formato exacto como el que usa el juego
-      setTestResults(prev => [...prev, "7. Intentando escribir con formato exacto como el que usa el juego..."]);
+      setTestResults(prev => [...prev, `7. Intentando escribir con formato exacto en ${TEST_COLLECTION}...`]);
       
       try {
         const docId = `game-${Date.now()}`;
@@ -93,10 +97,11 @@ export const FirestoreTest: React.FC = () => {
           winningNumbers: ["🍎", "🍊", "🍋", "🍉"],
           firstPrize: [],
           secondPrize: [],
-          thirdPrize: []
+          thirdPrize: [],
+          testMode: true
         };
         
-        await setDoc(doc(db, "game_results", docId), gameData);
+        await setDoc(doc(db, TEST_COLLECTION, docId), gameData);
         setTestResults(prev => [...prev, `✅ Escritura con formato de juego exitosa! ID: ${docId}`]);
       } catch (error: any) {
         setTestResults(prev => [...prev, `❌ Error al escribir con formato de juego: ${error.message}`]);
@@ -113,6 +118,7 @@ export const FirestoreTest: React.FC = () => {
   return (
     <div className="bg-white/90 p-6 rounded-xl shadow-lg max-w-xl mx-auto">
       <h2 className="text-xl font-bold mb-4">Diagnostico de Firestore</h2>
+      <p className="text-sm text-red-600 mb-4">⚠️ Las pruebas escriben en colecciones de prueba (test_collection, {TEST_COLLECTION}) y solo leen de game_results</p>
       
       <button 
         onClick={runTests}
