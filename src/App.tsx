@@ -88,7 +88,7 @@ function App() {
         </div>
 
         <WinnerAnnouncement 
-          winningNumbers={gameState.winningNumbers.length > 0 ? gameState.winningNumbers : ['❓', '❓', '❓', '❓']}
+          winningNumbers={gameState.winningNumbers || []}
           firstPrize={gameState.lastResults?.firstPrize || []}
           secondPrize={gameState.lastResults?.secondPrize || []}
           thirdPrize={gameState.lastResults?.thirdPrize || []}

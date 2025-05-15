@@ -9,13 +9,12 @@ export const GameHistoryButton: React.FC = () => {
     <>
       <button
         onClick={() => setIsModalOpen(true)}
-        className="fixed bottom-4 right-4 bg-purple-600 hover:bg-purple-700 
-                   text-white rounded-lg px-4 py-2 shadow-lg transition-all 
-                   hover:scale-105 flex items-center gap-2"
+        className="fixed top-4 left-4 bg-purple-600 hover:bg-purple-700 
+                   text-white rounded-full p-3 shadow-lg transition-all 
+                   hover:scale-105"
         aria-label="Game History"
       >
-        <History size={20} />
-        <span>Historial de Juegos</span>
+        <History size={24} />
       </button>
 
       {isModalOpen && <GameHistoryModal onClose={() => setIsModalOpen(false)} />}

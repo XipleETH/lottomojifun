@@ -6,7 +6,7 @@ import { useRealTimeTimer } from './useRealTimeTimer';
 import { subscribeToUserTickets } from '../firebase/game';
 import { useEffect } from 'react';
 import { db } from '../firebase/config';
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const MAX_TICKETS = 10;
 
@@ -21,57 +21,6 @@ export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
   const processingRef = useRef(false);
   const lastProcessedTimeRef = useRef<number>(0);
-
-  // Cargar el último resultado al iniciar
-  useEffect(() => {
-    const fetchLastGameResult = async () => {
-      try {
-        console.log('Cargando último resultado de juego...');
-        const resultsQuery = query(
-          collection(db, 'game_results'),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        );
-        
-        const snapshot = await getDocs(resultsQuery);
-        if (!snapshot.empty) {
-          const lastResultDoc = snapshot.docs[0];
-          const data = lastResultDoc.data();
-          
-          // Función para extraer el timestamp en milisegundos
-          const getTimestamp = (firestoreTimestamp: any): number => {
-            if (firestoreTimestamp?.toMillis) {
-              return firestoreTimestamp.toMillis();
-            } else if (typeof firestoreTimestamp === 'string') {
-              return new Date(firestoreTimestamp).getTime();
-            } else if (firestoreTimestamp?.seconds) {
-              return firestoreTimestamp.seconds * 1000 + (firestoreTimestamp.nanoseconds / 1000000);
-            } else {
-              return Date.now();
-            }
-          };
-          
-          console.log('Último resultado encontrado:', data);
-          
-          setGameState(prev => ({
-            ...prev,
-            winningNumbers: Array.isArray(data.winningNumbers) ? data.winningNumbers : [],
-            lastResults: {
-              firstPrize: Array.isArray(data.firstPrize) ? data.firstPrize : [],
-              secondPrize: Array.isArray(data.secondPrize) ? data.secondPrize : [],
-              thirdPrize: Array.isArray(data.thirdPrize) ? data.thirdPrize : []
-            }
-          }));
-        } else {
-          console.log('No se encontraron resultados previos');
-        }
-      } catch (error) {
-        console.error('Error al cargar el último resultado:', error);
-      }
-    };
-    
-    fetchLastGameResult();
-  }, []);
 
   // Suscribirse a los tickets del usuario
   useEffect(() => {
