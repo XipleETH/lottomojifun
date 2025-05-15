@@ -11,8 +11,6 @@ import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
-import { FirestoreTest } from './components/FirestoreTest';
-import { FirestoreDirectWrite } from './components/FirestoreDirectWrite';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -103,19 +101,6 @@ function App() {
             >
               <Zap size={16} /> Forzar Sorteo
             </button>
-            <button
-              onClick={() => setShowDiagnostic(!showDiagnostic)}
-              className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-            >
-              <Terminal size={16} /> {showDiagnostic ? 'Ocultar Diagnóstico' : 'Mostrar Diagnóstico'}
-            </button>
-          </div>
-        )}
-
-        {import.meta.env.DEV && showDiagnostic && (
-          <div className="mb-8">
-            <FirestoreTest />
-            <FirestoreDirectWrite />
           </div>
         )}
 

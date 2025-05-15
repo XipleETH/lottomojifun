@@ -4,7 +4,6 @@ import {
   addDoc, 
   doc,
   getDoc,
-  setDoc,
   query, 
   orderBy, 
   limit, 
@@ -45,78 +44,6 @@ const mapFirestoreTicket = (doc: any): Ticket => {
     timestamp: data.timestamp?.toMillis() || Date.now(),
     userId: data.userId
   };
-};
-
-// Guardar un resultado de juego
-export const saveGameResult = async (result: GameResult): Promise<string | null> => {
-  try {
-    console.log('Guardando resultado en Firebase:', result);
-    
-    // Verificar si ya existe un resultado para este mismo instante de tiempo
-    if (result.timestamp) {
-      const date = new Date(result.timestamp);
-      const minuteKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
-      
-      // Verificar si ya existe un resultado para este minuto
-      const existingResultsQuery = query(
-        collection(db, GAME_RESULTS_COLLECTION),
-        where('minuteKey', '==', minuteKey),
-        limit(1)
-      );
-      
-      const existingResults = await getDocs(existingResultsQuery);
-      
-      if (!existingResults.empty) {
-        const existingDoc = existingResults.docs[0];
-        console.log(`Ya existe un resultado para el minuto ${minuteKey} con ID: ${existingDoc.id}. No se guardará otro.`);
-        return existingDoc.id;
-      }
-    }
-    
-    // Preparar objetos de ticket para Firestore (evitar errores de serialización)
-    const prepareTickets = (tickets: Ticket[]) => {
-      return tickets.map(ticket => ({
-        id: ticket.id,
-        numbers: ticket.numbers || [],
-        timestamp: typeof ticket.timestamp === 'number' ? ticket.timestamp : Date.now(),
-        userId: ticket.userId || 'anonymous'
-      }));
-    };
-
-    // Verificar que los tickets estén definidos
-    const firstPrize = Array.isArray(result.firstPrize) ? result.firstPrize : [];
-    const secondPrize = Array.isArray(result.secondPrize) ? result.secondPrize : [];
-    const thirdPrize = Array.isArray(result.thirdPrize) ? result.thirdPrize : [];
-    const freePrize = Array.isArray(result.freePrize) ? result.freePrize : [];
-
-    // Generar un ID para el documento
-    const docId = result.id || crypto.randomUUID();
-
-    const resultData = {
-      timestamp: serverTimestamp(),
-      dateTime: new Date().toISOString(), // Añadir una fecha legible como respaldo
-      winningNumbers: Array.isArray(result.winningNumbers) ? result.winningNumbers : [],
-      firstPrize: prepareTickets(firstPrize),
-      secondPrize: prepareTickets(secondPrize),
-      thirdPrize: prepareTickets(thirdPrize),
-      freePrize: prepareTickets(freePrize),
-      // Añadir la clave del minuto para facilitar la detección de duplicados
-      minuteKey: result.timestamp ? 
-        `${new Date(result.timestamp).getFullYear()}-${new Date(result.timestamp).getMonth()+1}-${new Date(result.timestamp).getDate()}-${new Date(result.timestamp).getHours()}-${new Date(result.timestamp).getMinutes()}` :
-        `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}-${new Date().getHours()}-${new Date().getMinutes()}`
-    };
-    
-    console.log('Datos preparados para Firestore:', resultData);
-    
-    // Usar setDoc en lugar de addDoc
-    await setDoc(doc(db, GAME_RESULTS_COLLECTION, docId), resultData);
-    console.log('Documento creado en Firestore con ID:', docId);
-    
-    return docId;
-  } catch (error) {
-    console.error('Error saving game result:', error);
-    return null;
-  }
 };
 
 // Generar un ticket
