@@ -56,7 +56,7 @@ function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
-          <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji Online 🎲</h1>
+          <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji 🎲</h1>
           <p className="text-white text-xl mb-6">Solo para usuarios de Farcaster</p>
           <p className="text-white/80 mb-6">
             Para jugar a LottoMoji necesitas iniciar sesión con tu cuenta de Farcaster. 
@@ -78,7 +78,7 @@ function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
-          <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji Online 🎲</h1>
+          <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji 🎲</h1>
           <p className="text-white text-xl mb-6">Exclusivo para Farcaster</p>
           <p className="text-white/80 mb-6">
             Esta aplicación solo está disponible dentro de Farcaster Warpcast. 
@@ -94,7 +94,7 @@ function App() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl md:text-6xl font-bold text-white">
-            🎰 LottoMoji Online 🎲
+            🎰 LottoMoji 🎲
           </h1>
           <div className="flex items-center gap-2">
             {user && (
