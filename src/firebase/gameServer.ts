@@ -57,8 +57,8 @@ export const subscribeToGameState = (callback: (nextDrawTime: number, winningNum
     
     // Si no hay un tiempo válido o ya pasó, calcular el próximo minuto
     if (nextDrawTime <= now) {
-      const nextMinute = new Date(now);
-      nextMinute.setMinutes(now.getMinutes() + 1);
+      const nextMinute = new Date();
+      nextMinute.setMinutes(nextMinute.getMinutes() + 1);
       nextMinute.setSeconds(0);
       nextMinute.setMilliseconds(0);
       nextDrawTime = nextMinute.getTime();
@@ -101,76 +101,29 @@ export const initializeGameState = async (): Promise<void> => {
   try {
     console.log('[initializeGameState] Verificando estado del juego...');
     
-    // Primero verificar si ya existe un estado del juego válido
+    // Verificar si ya existe un estado del juego
     const stateDocRef = doc(db, 'game_state', GAME_STATE_DOC);
     const stateDoc = await getDoc(stateDocRef);
-    const now = new Date();
     
-    // Si existe un documento y tiene un tiempo de sorteo futuro válido, no hacer nada
     if (stateDoc.exists()) {
-      const data = stateDoc.data();
-      const nextDrawTime = data.nextDrawTime?.toMillis() || 0;
+      console.log('[initializeGameState] El estado del juego ya existe, no se realizará ninguna acción');
       
-      if (nextDrawTime > now.getTime()) {
-        const timeRemaining = Math.floor((nextDrawTime - now.getTime()) / 1000);
-        console.log(`[initializeGameState] Estado del juego ya inicializado con un tiempo de sorteo válido (en ${timeRemaining}s):`, new Date(nextDrawTime).toLocaleTimeString());
-        return;
-      } else {
-        console.log('[initializeGameState] El tiempo de sorteo existente ya pasó, pero NO actualizaremos los números ganadores');
-        
-        // Solo actualizaremos el nextDrawTime, pero mantendremos los números ganadores existentes
-        if (data.winningNumbers && Array.isArray(data.winningNumbers)) {
-          const nextMinute = new Date(now);
-          nextMinute.setMinutes(now.getMinutes() + 1);
-          nextMinute.setSeconds(0);
-          nextMinute.setMilliseconds(0);
-          
-          // Actualizar SOLO el nextDrawTime, preservando los winningNumbers existentes
-          await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
-            nextDrawTime: Timestamp.fromDate(nextMinute),
-            lastUpdated: serverTimestamp(),
-            source: 'client-init-time-only',
-            clientInitTime: now.toISOString()
-          }, { merge: true });
-          
-          console.log('[initializeGameState] Solo se actualizó el tiempo del próximo sorteo a:', nextMinute.toLocaleTimeString());
-          return;
-        }
-      }
+      // Si hay un documento existente, lo respetamos y no hacemos nada
+      // De esta forma solo Firebase Functions actualizará el estado
+      return;
     }
     
-    // Si no existe documento, esperar a que la función Firebase lo cree
-    console.log('[initializeGameState] No se encontró un estado del juego o no tiene los datos correctos, esperando a que Firebase Functions lo cree...');
+    console.log('[initializeGameState] No existe estado del juego, solicitando un sorteo inmediato...');
     
-    // NO crearemos ningún documento o actualizaremos números ganadores,
-    // Dejaremos que la función programada lo haga
-    
-    // Esperar 3 segundos y comprobar de nuevo
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Verificar una vez más
-    const retryDoc = await getDoc(stateDocRef);
-    if (!retryDoc.exists()) {
-      console.log('[initializeGameState] Aún no existe documento, creando uno mínimo...');
-      
-      // Crear un documento mínimo solo con nextDrawTime, sin números ganadores
-      const nextMinute = new Date(now);
-      nextMinute.setMinutes(now.getMinutes() + 1);
-      nextMinute.setSeconds(0);
-      nextMinute.setMilliseconds(0);
-      
-      await setDoc(doc(db, 'game_state', GAME_STATE_DOC), {
-        nextDrawTime: Timestamp.fromDate(nextMinute),
-        lastUpdated: serverTimestamp(),
-        source: 'client-emergency-init',
-        winningNumbers: [], // Array vacío, no generamos números
-        clientEmergencyInitTime: now.toISOString()
-      });
-      
-      console.log('[initializeGameState] Creado documento de emergencia con próximo sorteo a las:', nextMinute.toLocaleTimeString());
-    } else {
-      console.log('[initializeGameState] El documento ya existe después de esperar, no es necesario crear uno');
+    // Si no existe documento, solicitar un sorteo inmediato a Firebase Functions
+    // para que sea el servidor el que genere los números ganadores oficiales
+    try {
+      await requestManualGameDraw();
+      console.log('[initializeGameState] Solicitud de sorteo enviada a Firebase Functions');
+    } catch (error) {
+      console.error('[initializeGameState] Error al solicitar sorteo manual:', error);
     }
+    
   } catch (error) {
     console.error('[initializeGameState] Error al inicializar el estado del juego:', error);
   }
