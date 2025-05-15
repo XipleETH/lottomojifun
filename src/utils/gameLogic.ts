@@ -1,10 +1,15 @@
 import { Ticket } from '../types';
 
-export const EMOJIS = ['🌟', '🎈', '🎨', '🌈', '🦄', '🍭', '🎪', '🎠', '🎡', '🎢', 
-                      '🌺', '🦋', '🐬', '🌸', '🍦', '🎵', '🎯', '🌴', '🎩', '🎭',
-                      '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊', 
-                      '😋', '😎', '😍', '😘', '🥰', '😗', '😙', '😚', '🙂', '🤗'];
+// Lista de exactamente 25 emojis
+export const EMOJIS = [
+  '😀', '😁', '😂', '🤣', '😃', 
+  '😄', '😅', '😆', '😉', '😊', 
+  '😋', '😎', '😍', '😘', '🥰', 
+  '😗', '😙', '😚', '🙂', '🤗',
+  '😇', '🥳', '🤯', '🤠', '🤖'
+];
 
+// Generar números aleatorios con posible repetición
 export const generateRandomEmojis = (count: number): string[] => {
   const result: string[] = [];
   
@@ -16,6 +21,7 @@ export const generateRandomEmojis = (count: number): string[] => {
   return result;
 };
 
+// Verificar si un ticket es ganador
 export const checkWin = (ticket: string[], winning: string[]): {
   firstPrize: boolean;
   secondPrize: boolean;
@@ -30,19 +36,21 @@ export const checkWin = (ticket: string[], winning: string[]): {
     };
   }
 
-  const exactMatch = (a: string[], b: string[]) => 
+  // Comparar arrays para verificar si son exactamente iguales (mismo orden)
+  const exactMatch = (a: string[], b: string[]): boolean => 
     a.length === b.length && a.every((v, i) => v === b[i]);
   
-  const containsAll = (a: string[], b: string[]) => 
+  // Verificar si un array contiene todos los elementos del otro
+  const containsAll = (a: string[], b: string[]): boolean => 
     b.every(v => a.includes(v));
 
-  // Verificar primer premio: todos los emojis en el mismo orden
+  // Primer premio: 4 emojis en el mismo orden exacto
   const firstPrize = exactMatch(ticket.slice(0, 4), winning.slice(0, 4));
   
-  // Verificar segundo premio: primeros 3 emojis en el mismo orden
+  // Segundo premio: los primeros 3 emojis en el mismo orden
   const secondPrize = !firstPrize && exactMatch(ticket.slice(0, 3), winning.slice(0, 3));
   
-  // Verificar tercer premio: contiene todos los emojis ganadores pero en diferente orden
+  // Tercer premio: tiene los mismos emojis pero en diferente orden
   const thirdPrize = !firstPrize && !secondPrize && containsAll(ticket, winning);
 
   return {

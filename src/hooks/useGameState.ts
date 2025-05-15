@@ -82,17 +82,14 @@ export function useGameState() {
   const generateRandomTicket = useCallback(async () => {
     if (gameState.tickets.length >= MAX_TICKETS) return;
     
-    // Generar 4 emojis aleatorios
-    const emojis = ['😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊', 
-                   '😋', '😎', '😍', '😘', '🥰', '😗', '😙', '😚', '🙂', '🤗'];
+    // Importar la función de generación de emojis aleatorios
+    const { generateRandomEmojis } = await import('../utils/gameLogic');
     
-    const randomEmojis = Array(4).fill(0).map(() => {
-      const randomIndex = Math.floor(Math.random() * emojis.length);
-      return emojis[randomIndex];
-    });
+    // Generar 4 emojis aleatorios
+    const randomEmojis = generateRandomEmojis(4);
     
     await generateTicket(randomEmojis);
-  }, [gameState.tickets.length]);
+  }, [gameState.tickets.length, generateTicket]);
 
   // Generar un ticket con emojis específicos
   const generateTicket = useCallback(async (numbers: string[]) => {

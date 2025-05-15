@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { GameResult, Ticket } from '../types';
 import { getCurrentUser } from './auth';
+import { checkAndProcessGameDraw } from './gameServer';
 
 const GAME_RESULTS_COLLECTION = 'game_results';
 const TICKETS_COLLECTION = 'tickets';
@@ -164,14 +165,25 @@ export const subscribeToCurrentGameState = (
     return Math.max(0, Math.min(60, Math.floor(diff / 1000)));
   };
   
-  // Variable para el intervalo del contador
+  // Variable para el intervalo del contador y estado anterior
   let clientInterval: number | null = null;
+  let previousWinningNumbers: string[] = [];
   
   // Suscribirse a cambios en Firestore
   const unsubscribe = onSnapshot(stateDocRef, (snapshot) => {
     const data = snapshot.data() || {};
     const winningNumbers = data.winningNumbers || [];
     const nextDrawTime = data.nextDrawTime?.toMillis() || Date.now() + 60000;
+    
+    // Detectar si ha ocurrido un nuevo sorteo (winningNumbers ha cambiado)
+    const newDrawOccurred = winningNumbers.length > 0 && 
+      (previousWinningNumbers.length === 0 || 
+       !winningNumbers.every((n, i) => n === previousWinningNumbers[i]));
+    
+    if (newDrawOccurred) {
+      console.log('¡Nuevo sorteo detectado!', { winningNumbers });
+      previousWinningNumbers = [...winningNumbers];
+    }
     
     // Limpiar cualquier intervalo existente
     if (clientInterval) {
@@ -192,7 +204,11 @@ export const subscribeToCurrentGameState = (
       
       // Si llegamos a cero, detener el intervalo
       if (currentTimeRemaining <= 0 && clientInterval) {
-        console.log("Contador llegó a cero");
+        console.log("Contador llegó a cero, esperando próximo sorteo...");
+        // Realizar una verificación de sorteo
+        checkAndProcessGameDraw().then(processed => {
+          console.log("Verificación de sorteo desde contador:", processed ? "Procesado" : "No necesario");
+        });
         clearInterval(clientInterval);
         clientInterval = null;
       }

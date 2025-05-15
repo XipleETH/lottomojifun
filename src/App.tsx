@@ -1,15 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Timer } from './components/Timer';
 import { Ticket as TicketComponent } from './components/Ticket';
 import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
-import { Trophy, UserCircle } from 'lucide-react';
+import { Trophy, UserCircle, RefreshCw } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
-import { initializeGameState } from './firebase/gameServer';
+import { initializeGameState, processGameDraw, checkAndProcessGameDraw } from './firebase/gameServer';
 
 function App() {
   const { gameState, generateTicket, generateRandomTicket } = useGameState();
@@ -17,6 +17,7 @@ function App() {
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
   const { user, isLoading } = useAuth();
+  const [isProcessingDraw, setIsProcessingDraw] = useState(false);
 
   // Inicializar Firebase y SDK
   useEffect(() => {
@@ -29,7 +30,7 @@ function App() {
   }, []);
 
   const handleWin = async () => {
-    if (gameState.lastResults?.firstPrize.length > 0) {
+    if (gameState.lastResults?.firstPrize?.length > 0) {
       try {
         await sendNotification({
           title: '🎉 You Won!',
@@ -38,6 +39,32 @@ function App() {
       } catch (error) {
         console.error('Failed to send notification:', error);
       }
+    }
+  };
+
+  // Función para ejecutar el sorteo manualmente (solo para pruebas)
+  const handleManualDraw = async () => {
+    if (isProcessingDraw) return;
+    
+    setIsProcessingDraw(true);
+    try {
+      console.log("Ejecutando sorteo manual...");
+      await processGameDraw();
+      console.log("Sorteo manual completado");
+    } catch (error) {
+      console.error("Error en sorteo manual:", error);
+    } finally {
+      setIsProcessingDraw(false);
+    }
+  };
+
+  const handleCheckDraw = async () => {
+    try {
+      console.log("Verificando sorteo...");
+      const processed = await checkAndProcessGameDraw();
+      console.log("Verificación de sorteo:", processed ? "Procesado" : "No necesario");
+    } catch (error) {
+      console.error("Error verificando sorteo:", error);
     }
   };
 
@@ -77,7 +104,25 @@ function App() {
           <p className="text-white/90 text-xl mb-4">
             Match 4 emojis to win! 🏆
           </p>
-          <p className="text-white/80">Next draw in:</p>
+          <div className="flex justify-between items-center">
+            <p className="text-white/80">Next draw in:</p>
+            <div className="flex space-x-2">
+              <button 
+                onClick={handleCheckDraw}
+                className="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded"
+              >
+                Verificar Sorteo
+              </button>
+              <button 
+                onClick={handleManualDraw}
+                disabled={isProcessingDraw}
+                className={`bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded flex items-center ${isProcessingDraw ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isProcessingDraw && <RefreshCw className="w-4 h-4 mr-1 animate-spin" />}
+                Sorteo Manual
+              </button>
+            </div>
+          </div>
           <div className="flex justify-center mt-4">
             <Timer seconds={gameState.timeRemaining} />
         </div>
@@ -112,9 +157,9 @@ function App() {
               key={ticket.id}
               ticket={ticket}
               isWinner={
-                gameState.lastResults?.firstPrize.includes(ticket) ? 'first' :
-                gameState.lastResults?.secondPrize.includes(ticket) ? 'second' :
-                gameState.lastResults?.thirdPrize.includes(ticket) ? 'third' : null
+                gameState.lastResults?.firstPrize?.some(t => t.id === ticket.id) ? 'first' :
+                gameState.lastResults?.secondPrize?.some(t => t.id === ticket.id) ? 'second' :
+                gameState.lastResults?.thirdPrize?.some(t => t.id === ticket.id) ? 'third' : null
               }
             />
           ))}
