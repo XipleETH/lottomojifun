@@ -51,7 +51,9 @@ export function useGameState() {
       };
 
       setGameState(prevState => {
-        const currentTickets = prevState.tickets || [];
+        // Filtrar tickets temporales y procesar sólo los tickets reales
+        const currentTickets = prevState.tickets.filter(ticket => !ticket.id?.startsWith('temp-'));
+        
         currentTickets.forEach(ticket => {
           if (!ticket?.numbers) return;
           const winStatus = checkWin(ticket.numbers, winning);
@@ -74,7 +76,7 @@ export function useGameState() {
         saveGameResult(gameResult);
 
         return {
-          ...initialGameState,
+          ...prevState,
           tickets: currentTickets, // Mantener los tickets actuales
           winningNumbers: winning,
           lastResults: results,
@@ -93,9 +95,37 @@ export function useGameState() {
   const generateTicket = useCallback(async (numbers: string[]) => {
     if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) return;
     
-    await import('../firebase/game').then(({ generateTicket: generateFirebaseTicket }) => {
-      generateFirebaseTicket(numbers);
-    });
+    try {
+      // Crear un ticket temporal para mostrar inmediatamente
+      const tempTicket: Ticket = {
+        id: 'temp-' + crypto.randomUUID(),
+        numbers,
+        timestamp: Date.now(),
+        userId: 'temp'
+      };
+      
+      // Actualizar el estado inmediatamente con el ticket temporal
+      setGameState(prev => ({
+        ...prev,
+        tickets: [...prev.tickets, tempTicket]
+      }));
+      
+      // Generar el ticket en Firebase
+      const ticket = await import('../firebase/game').then(({ generateTicket: generateFirebaseTicket }) => {
+        return generateFirebaseTicket(numbers);
+      });
+      
+      if (!ticket) {
+        // Si hay un error, eliminar el ticket temporal
+        setGameState(prev => ({
+          ...prev,
+          tickets: prev.tickets.filter(t => t.id !== tempTicket.id)
+        }));
+      }
+      
+    } catch (error) {
+      console.error('Error generating ticket:', error);
+    }
   }, [gameState.tickets.length]);
 
   return {
