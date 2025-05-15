@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { GameState, Ticket, GameResult } from '../types';
 import { useRealTimeTimer } from './useRealTimeTimer';
 import { subscribeToUserTickets, subscribeToGameResults } from '../firebase/game';
-import { requestGameDraw } from '../firebase/gameServer';
+import { requestManualGameDraw, subscribeToGameState } from '../firebase/gameServer';
 
 const MAX_TICKETS = 10;
 
@@ -16,21 +16,32 @@ const initialGameState: GameState = {
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
 
-  // Suscribirse a los tickets del usuario
+  // Suscribirse a los tickets del usuario y al estado del juego
   useEffect(() => {
-    const unsubscribe = subscribeToUserTickets((tickets) => {
+    // Suscribirse a los tickets del usuario
+    const unsubscribeTickets = subscribeToUserTickets((tickets) => {
       setGameState(prev => ({
         ...prev,
         tickets
       }));
     });
 
-    return () => unsubscribe();
+    // Suscribirse al estado del juego para obtener los números ganadores actuales
+    const unsubscribeState = subscribeToGameState((nextDrawTime, winningNumbers) => {
+      setGameState(prev => ({
+        ...prev,
+        winningNumbers
+      }));
+    });
+
+    return () => {
+      unsubscribeTickets();
+      unsubscribeState();
+    };
   }, []);
 
   // Suscribirse a los resultados del juego en Firebase
   useEffect(() => {
-    // Suscribirse a cambios en los resultados
     const unsubscribe = subscribeToGameResults((results) => {
       if (results.length > 0) {
         const latestResult = results[0]; // El primer resultado es el más reciente
@@ -51,19 +62,21 @@ export function useGameState() {
     return () => unsubscribe();
   }, []);
 
-  // Esta función ahora solo actualiza la UI después de un sorteo
+  // Esta función se llama cuando termina el temporizador
   const onGameProcessed = useCallback(() => {
-    console.log('Juego procesado, actualizando UI...');
-    // No necesitamos hacer nada aquí, ya que los resultados llegarán a través de la suscripción
+    console.log('Temporizador terminado, solicitando nuevo sorteo...');
   }, []);
 
+  // Obtener el tiempo restante del temporizador
   const timeRemaining = useRealTimeTimer(onGameProcessed);
 
+  // Función para forzar un sorteo manualmente
   const forceGameDraw = useCallback(() => {
     console.log('Forzando sorteo manual...');
-    requestGameDraw();
+    requestManualGameDraw();
   }, []);
 
+  // Función para generar un nuevo ticket
   const generateTicket = useCallback(async (numbers: string[]) => {
     if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) return;
     

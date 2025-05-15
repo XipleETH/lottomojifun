@@ -8,6 +8,7 @@
  */
 
 const { onCall } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -66,10 +67,10 @@ const checkWin = (ticketNumbers, winningNumbers) => {
   };
 };
 
-// Función para procesar el sorteo del juego
-exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
+// Función compartida para procesar el sorteo
+const processGameDraw = async () => {
   try {
-    logger.info("Solicitud de sorteo recibida");
+    logger.info("Procesando sorteo del juego...");
     
     // 1. Verificar si ya se procesó un sorteo para este minuto
     const now = new Date();
@@ -81,11 +82,7 @@ exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
     
     if (drawControlDoc.exists) {
       logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute}`);
-      return { 
-        success: true, 
-        resultId: drawControlDoc.data().resultId,
-        alreadyProcessed: true 
-      };
+      return { success: true };
     }
     
     // Marcar este minuto como en proceso para evitar procesamiento duplicado
@@ -93,8 +90,6 @@ exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
       timestamp: FieldValue.serverTimestamp(),
       inProgress: true
     });
-    
-    logger.info("Procesando sorteo del juego...");
     
     // 2. Generar números ganadores
     const winningNumbers = generateRandomEmojis(4);
@@ -184,9 +179,28 @@ exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
     
     logger.info("Sorteo procesado con éxito con ID:", gameResultId);
     
-    return { success: true, resultId: gameResultId, alreadyProcessed: false };
+    return { success: true };
   } catch (error) {
     logger.error("Error procesando el sorteo:", error);
     return { success: false, error: error.message };
   }
+};
+
+// Función programada que se ejecuta cada minuto para realizar el sorteo automáticamente
+exports.scheduledGameDraw = onSchedule({
+  schedule: "every 1 minutes",
+  timeZone: "America/Mexico_City", // Ajusta a tu zona horaria
+  retryConfig: {
+    maxRetryAttempts: 3,
+    minBackoffSeconds: 10
+  }
+}, async (event) => {
+  logger.info("Ejecutando sorteo programado:", event.jobName);
+  await processGameDraw();
+});
+
+// Función Cloud que puede ser invocada manualmente (para pruebas o sorteos forzados)
+exports.triggerGameDraw = onCall({ maxInstances: 1 }, async (request) => {
+  logger.info("Solicitud manual de sorteo recibida");
+  return await processGameDraw();
 });
