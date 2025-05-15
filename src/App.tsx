@@ -9,7 +9,8 @@ import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
-import { initializeGameState, processGameDraw } from './firebase/gameServer';
+import { initializeGameState } from './firebase/gameServer';
+import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 
 function App() {
   const { gameState, generateTicket } = useGameState();
@@ -22,15 +23,12 @@ function App() {
   useEffect(() => {
     sdk.actions.ready();
     initializeGameState();
-    
-    // Solo para desarrollo - simular sorteo cada minuto
-    // En producción, esto se haría con Cloud Functions
-    const interval = setInterval(() => {
-      processGameDraw();
-    }, 60000);
-    
-    return () => clearInterval(interval);
   }, []);
+
+  // Mostrar notificación cuando hay ganadores
+  useEffect(() => {
+    handleWin();
+  }, [gameState.lastResults]);
 
   const handleWin = async () => {
     if (gameState.lastResults?.firstPrize.length > 0) {
@@ -87,19 +85,13 @@ function App() {
         </div>
 
         {gameState.lastResults && (
-          <div className="mb-8 p-6 bg-white/90 rounded-xl backdrop-blur-sm shadow-xl">
-            <h2 className="text-2xl font-bold mb-4 flex items-center justify-center">
-              <Trophy className="mr-2" /> Latest Results
-            </h2>
-            <div className="text-center mb-4">
-              <p className="text-xl">{gameState.winningNumbers.join(' ')}</p>
-            </div>
-            {gameState.lastResults.firstPrize.length > 0 && (
-              <div className="text-center text-green-600">
-                🎉 First Prize Winner(s)! Check your tickets!
-              </div>
-            )}
-          </div>
+          <WinnerAnnouncement 
+            winningNumbers={gameState.winningNumbers}
+            firstPrize={gameState.lastResults.firstPrize}
+            secondPrize={gameState.lastResults.secondPrize}
+            thirdPrize={gameState.lastResults.thirdPrize}
+            currentUserId={user?.id}
+          />
         )}
 
         <TicketGenerator
