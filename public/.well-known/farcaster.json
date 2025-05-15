@@ -5,8 +5,8 @@
     "iconUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
     "splashImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
     "splashBackgroundColor": "#8B5CF6",
-    "homeUrl": "https://lottomoji-miniapp.vercel.app",
-    "webhookUrl": "https://lottomoji-miniapp.vercel.app/api/webhook",
+    "homeUrl": "https://lottomojifun.vercel.app",
+    "webhookUrl": "https://lottomojifun.vercel.app/api/webhook",
     "subtitle": "Match emojis to win!",
     "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck!",
     "screenshotUrls": [
