@@ -27,6 +27,23 @@ function App() {
     initializeGameState().then(() => {
       console.log("Estado del juego inicializado");
     });
+    
+    // Verificar periódicamente si es hora de un sorteo
+    const checkInterval = setInterval(() => {
+      checkAndProcessGameDraw()
+        .then(processed => {
+          if (processed) {
+            console.log("Sorteo procesado automáticamente");
+          }
+        })
+        .catch(error => {
+          console.error("Error verificando sorteo:", error);
+        });
+    }, 10000); // Verificar cada 10 segundos
+    
+    return () => {
+      clearInterval(checkInterval);
+    };
   }, []);
 
   const handleWin = async () => {
@@ -152,17 +169,28 @@ function App() {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {gameState.tickets.map(ticket => (
-            <TicketComponent
-              key={ticket.id}
-              ticket={ticket}
-              isWinner={
-                gameState.lastResults?.firstPrize?.some(t => t.id === ticket.id) ? 'first' :
-                gameState.lastResults?.secondPrize?.some(t => t.id === ticket.id) ? 'second' :
-                gameState.lastResults?.thirdPrize?.some(t => t.id === ticket.id) ? 'third' : null
+          {gameState.tickets.map(ticket => {
+            // Verificar si este ticket es ganador
+            let winnerStatus = null;
+            if (gameState.lastResults) {
+              // Usar ID para comparar tickets
+              if (gameState.lastResults.firstPrize?.some(t => t.id === ticket.id)) {
+                winnerStatus = 'first';
+              } else if (gameState.lastResults.secondPrize?.some(t => t.id === ticket.id)) {
+                winnerStatus = 'second';
+              } else if (gameState.lastResults.thirdPrize?.some(t => t.id === ticket.id)) {
+                winnerStatus = 'third';
               }
-            />
-          ))}
+            }
+            
+            return (
+              <TicketComponent
+                key={ticket.id}
+                ticket={ticket}
+                isWinner={winnerStatus}
+              />
+            );
+          })}
         </div>
       </div>
       <GameHistoryButton />

@@ -15,7 +15,6 @@ import {
 } from 'firebase/firestore';
 import { GameResult, Ticket } from '../types';
 import { getCurrentUser } from './auth';
-import { checkAndProcessGameDraw } from './gameServer';
 
 const GAME_RESULTS_COLLECTION = 'game_results';
 const TICKETS_COLLECTION = 'tickets';
@@ -205,10 +204,7 @@ export const subscribeToCurrentGameState = (
       // Si llegamos a cero, detener el intervalo
       if (currentTimeRemaining <= 0 && clientInterval) {
         console.log("Contador llegó a cero, esperando próximo sorteo...");
-        // Realizar una verificación de sorteo
-        checkAndProcessGameDraw().then(processed => {
-          console.log("Verificación de sorteo desde contador:", processed ? "Procesado" : "No necesario");
-        });
+        // Ya no llamamos a checkAndProcessGameDraw aquí para evitar la importación circular
         clearInterval(clientInterval);
         clientInterval = null;
       }

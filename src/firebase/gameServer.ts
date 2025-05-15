@@ -37,10 +37,17 @@ export const processGameDraw = async (): Promise<void> => {
       winningNumbers,
       nextDrawTime: Timestamp.fromDate(nextDrawTime),
       lastUpdated: serverTimestamp()
+    }).catch(error => {
+      console.error('Error actualizando estado del juego:', error);
+      throw error;
     });
     
     // 4. Obtener tickets activos
-    const ticketsSnapshot = await getDocs(collection(db, TICKETS_COLLECTION));
+    const ticketsSnapshot = await getDocs(collection(db, TICKETS_COLLECTION)).catch(error => {
+      console.error('Error obteniendo tickets:', error);
+      throw error;
+    });
+    
     const tickets: Ticket[] = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
       numbers: doc.data().numbers || [],
@@ -59,18 +66,22 @@ export const processGameDraw = async (): Promise<void> => {
     
     tickets.forEach(ticket => {
       if (!ticket?.numbers) return;
-      const winStatus = checkWin(ticket.numbers, winningNumbers);
-      if (winStatus.firstPrize) {
-        console.log(`¡Ticket ganador de primer premio! ID: ${ticket.id}`);
-        results.firstPrize.push(ticket);
-      }
-      else if (winStatus.secondPrize) {
-        console.log(`¡Ticket ganador de segundo premio! ID: ${ticket.id}`);
-        results.secondPrize.push(ticket);
-      }
-      else if (winStatus.thirdPrize) {
-        console.log(`¡Ticket ganador de tercer premio! ID: ${ticket.id}`);
-        results.thirdPrize.push(ticket);
+      try {
+        const winStatus = checkWin(ticket.numbers, winningNumbers);
+        if (winStatus.firstPrize) {
+          console.log(`¡Ticket ganador de primer premio! ID: ${ticket.id}`);
+          results.firstPrize.push(ticket);
+        }
+        else if (winStatus.secondPrize) {
+          console.log(`¡Ticket ganador de segundo premio! ID: ${ticket.id}`);
+          results.secondPrize.push(ticket);
+        }
+        else if (winStatus.thirdPrize) {
+          console.log(`¡Ticket ganador de tercer premio! ID: ${ticket.id}`);
+          results.thirdPrize.push(ticket);
+        }
+      } catch (error) {
+        console.error('Error comprobando ticket:', ticket, error);
       }
     });
     
@@ -82,12 +93,16 @@ export const processGameDraw = async (): Promise<void> => {
       ...results
     };
     
-    await setDoc(doc(db, GAME_RESULTS_COLLECTION, gameResult.id), gameResult);
+    await setDoc(doc(db, GAME_RESULTS_COLLECTION, gameResult.id), gameResult).catch(error => {
+      console.error('Error guardando resultado del juego:', error);
+      throw error;
+    });
     
     console.log('Game draw processed successfully:', gameResult);
     console.log(`Próximo sorteo a las: ${nextDrawTime.toLocaleTimeString()}`);
   } catch (error) {
     console.error('Error processing game draw:', error);
+    throw error;
   }
 };
 
