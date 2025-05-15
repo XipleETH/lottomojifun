@@ -16,6 +16,8 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
     const fetchGameHistory = async () => {
       try {
         setLoading(true);
+        console.log('Obteniendo historial de juegos desde Firestore...');
+        
         const historyQuery = query(
           collection(db, 'game_results'),
           orderBy('timestamp', 'desc'),
@@ -23,9 +25,13 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
         );
         
         const snapshot = await getDocs(historyQuery);
+        console.log(`Se encontraron ${snapshot.docs.length} resultados en Firestore`);
+        
         const results: GameResult[] = snapshot.docs.map(doc => {
           try {
             const data = doc.data();
+            console.log(`Procesando documento ${doc.id}:`, data);
+            
             // Validar que los datos tengan la estructura esperada
             return {
               id: doc.id,
@@ -41,7 +47,7 @@ export const GameHistoryModal: React.FC<GameHistoryModalProps> = ({ onClose }) =
           }
         }).filter(result => result !== null) as GameResult[];
         
-        console.log('Fetched history results:', results.length);
+        console.log('Historial procesado correctamente:', results.length, 'resultados');
         setHistory(results);
       } catch (error) {
         console.error('Error fetching game history:', error);

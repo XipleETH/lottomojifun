@@ -48,25 +48,36 @@ const mapFirestoreTicket = (doc: any): Ticket => {
 // Guardar un resultado de juego
 export const saveGameResult = async (result: GameResult): Promise<string | null> => {
   try {
+    console.log('Guardando resultado en Firebase:', result);
+    
     // Preparar objetos de ticket para Firestore (evitar errores de serialización)
     const prepareTickets = (tickets: Ticket[]) => {
       return tickets.map(ticket => ({
         id: ticket.id,
-        numbers: ticket.numbers,
-        timestamp: ticket.timestamp,
-        userId: ticket.userId
+        numbers: ticket.numbers || [],
+        timestamp: typeof ticket.timestamp === 'number' ? ticket.timestamp : Date.now(),
+        userId: ticket.userId || 'anonymous'
       }));
     };
 
+    // Verificar que los tickets estén definidos
+    const firstPrize = Array.isArray(result.firstPrize) ? result.firstPrize : [];
+    const secondPrize = Array.isArray(result.secondPrize) ? result.secondPrize : [];
+    const thirdPrize = Array.isArray(result.thirdPrize) ? result.thirdPrize : [];
+
     const resultData = {
       timestamp: serverTimestamp(),
-      winningNumbers: result.winningNumbers,
-      firstPrize: prepareTickets(result.firstPrize),
-      secondPrize: prepareTickets(result.secondPrize),
-      thirdPrize: prepareTickets(result.thirdPrize)
+      dateTime: new Date().toISOString(), // Añadir una fecha legible como respaldo
+      winningNumbers: Array.isArray(result.winningNumbers) ? result.winningNumbers : [],
+      firstPrize: prepareTickets(firstPrize),
+      secondPrize: prepareTickets(secondPrize),
+      thirdPrize: prepareTickets(thirdPrize)
     };
     
+    console.log('Datos preparados para Firestore:', resultData);
+    
     const resultRef = await addDoc(collection(db, GAME_RESULTS_COLLECTION), resultData);
+    console.log('Documento creado en Firestore con ID:', resultRef.id);
     
     return resultRef.id;
   } catch (error) {

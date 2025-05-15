@@ -4,7 +4,7 @@ import { Ticket as TicketComponent } from './components/Ticket';
 import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
-import { Trophy, UserCircle } from 'lucide-react';
+import { Trophy, UserCircle, Zap } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
@@ -13,7 +13,7 @@ import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 
 function App() {
-  const { gameState, generateTicket } = useGameState();
+  const { gameState, generateTicket, forceGameDraw } = useGameState();
   const { context } = useMiniKit();
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
@@ -92,6 +92,17 @@ function App() {
             thirdPrize={gameState.lastResults.thirdPrize}
             currentUserId={user?.id}
           />
+        )}
+
+        {import.meta.env.DEV && (
+          <div className="flex justify-center mb-6">
+            <button
+              onClick={forceGameDraw}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <Zap size={16} /> Forzar Sorteo (Solo Desarrollo)
+            </button>
+          </div>
         )}
 
         <TicketGenerator
