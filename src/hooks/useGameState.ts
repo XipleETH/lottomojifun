@@ -53,7 +53,8 @@ export function useGameState() {
           lastResults: {
             firstPrize: latestResult.firstPrize,
             secondPrize: latestResult.secondPrize,
-            thirdPrize: latestResult.thirdPrize
+            thirdPrize: latestResult.thirdPrize,
+            freePrize: latestResult.freePrize || [] // Compatibilidad con resultados antiguos
           }
         }));
       }

@@ -53,17 +53,38 @@ const generateRandomEmojis = (count) => {
   return result;
 };
 
-// Función para verificar si un ticket es ganador
+// Función para verificar si un ticket es ganador con los nuevos criterios
 const checkWin = (ticketNumbers, winningNumbers) => {
-  if (!ticketNumbers || !winningNumbers) return { firstPrize: false, secondPrize: false, thirdPrize: false };
+  if (!ticketNumbers || !winningNumbers) return { 
+    firstPrize: false, 
+    secondPrize: false, 
+    thirdPrize: false,
+    freePrize: false 
+  };
   
-  // Contar cuántos números coinciden
-  const matches = ticketNumbers.filter(num => winningNumbers.includes(num)).length;
+  // Verificar coincidencias exactas (mismo emoji en la misma posición)
+  let exactMatches = 0;
+  for (let i = 0; i < ticketNumbers.length; i++) {
+    if (i < winningNumbers.length && ticketNumbers[i] === winningNumbers[i]) {
+      exactMatches++;
+    }
+  }
+  
+  // Verificar coincidencias en desorden (emoji presente pero en otra posición)
+  const unorderedMatches = ticketNumbers.filter(emoji => winningNumbers.includes(emoji)).length;
   
   return {
-    firstPrize: matches === 4,   // Todos los números coinciden
-    secondPrize: matches === 3,  // 3 números coinciden
-    thirdPrize: matches === 2    // 2 números coinciden
+    // 4 aciertos en el mismo orden (premio mayor)
+    firstPrize: exactMatches === 4,
+    
+    // 3 aciertos en orden exacto (segundo premio)
+    secondPrize: exactMatches === 3,
+    
+    // 4 aciertos en desorden (tercer premio)
+    thirdPrize: exactMatches < 4 && unorderedMatches === 4,
+    
+    // 3 aciertos en desorden (ticket gratis)
+    freePrize: exactMatches < 3 && unorderedMatches === 3
   };
 };
 
@@ -78,18 +99,47 @@ const processGameDraw = async () => {
     
     // Verificar en una colección especial para control de sorteos
     const drawControlRef = db.collection('draw_control').doc(currentMinute);
-    const drawControlDoc = await drawControlRef.get();
     
-    if (drawControlDoc.exists) {
-      logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute}`);
-      return { success: true };
+    // Usar transacción para evitar condiciones de carrera
+    const result = await db.runTransaction(async (transaction) => {
+      const drawControlDoc = await transaction.get(drawControlRef);
+      
+      // Si ya existe un documento para este minuto, otro proceso ya está manejando este sorteo
+      if (drawControlDoc.exists) {
+        const data = drawControlDoc.data();
+        
+        // Si ya está completado, retornar el ID del resultado
+        if (data.completed) {
+          logger.info(`Ya se procesó un sorteo para el minuto ${currentMinute} con ID: ${data.resultId}`);
+          return { success: true, alreadyProcessed: true, resultId: data.resultId };
+        }
+        
+        // Si está en proceso pero no completado, esperar un poco y reintentar
+        if (data.inProgress) {
+          logger.info(`Sorteo para el minuto ${currentMinute} en proceso, esperando...`);
+          return { success: false, inProgress: true };
+        }
+      }
+      
+      // Marcar este minuto como en proceso
+      transaction.set(drawControlRef, {
+        timestamp: FieldValue.serverTimestamp(),
+        inProgress: true,
+        startedAt: now.toISOString()
+      });
+      
+      return { success: true, alreadyProcessed: false };
+    });
+    
+    // Si ya está procesado o en progreso, retornar
+    if (result.alreadyProcessed) {
+      return result;
     }
     
-    // Marcar este minuto como en proceso para evitar procesamiento duplicado
-    await drawControlRef.set({
-      timestamp: FieldValue.serverTimestamp(),
-      inProgress: true
-    });
+    if (!result.success) {
+      logger.info("Sorteo ya está siendo procesado por otra instancia, abortando...");
+      return { success: false };
+    }
     
     // 2. Generar números ganadores
     const winningNumbers = generateRandomEmojis(4);
@@ -117,25 +167,29 @@ const processGameDraw = async () => {
     
     logger.info(`Procesando ${tickets.length} tickets`);
     
-    // 6. Comprobar ganadores
+    // 6. Comprobar ganadores con los nuevos criterios
     const results = {
       firstPrize: [],
       secondPrize: [],
-      thirdPrize: []
+      thirdPrize: [],
+      freePrize: []
     };
     
     tickets.forEach(ticket => {
       if (!ticket?.numbers) return;
       const winStatus = checkWin(ticket.numbers, winningNumbers);
+      
       if (winStatus.firstPrize) results.firstPrize.push(ticket);
       else if (winStatus.secondPrize) results.secondPrize.push(ticket);
       else if (winStatus.thirdPrize) results.thirdPrize.push(ticket);
+      else if (winStatus.freePrize) results.freePrize.push(ticket);
     });
     
     logger.info("Resultados:", {
       firstPrize: results.firstPrize.length,
       secondPrize: results.secondPrize.length,
-      thirdPrize: results.thirdPrize.length
+      thirdPrize: results.thirdPrize.length,
+      freePrize: results.freePrize.length
     });
     
     // 7. Guardar resultado
@@ -164,22 +218,48 @@ const processGameDraw = async () => {
         numbers: ticket.numbers,
         timestamp: ticket.timestamp,
         userId: ticket.userId || 'anonymous'
+      })),
+      freePrize: results.freePrize.map(ticket => ({
+        id: ticket.id,
+        numbers: ticket.numbers,
+        timestamp: ticket.timestamp,
+        userId: ticket.userId || 'anonymous'
       }))
     };
     
+    // Guardar el resultado en Firestore
     await db.collection(GAME_RESULTS_COLLECTION).doc(gameResultId).set(serializableResult);
     
-    // 8. Actualizar el control de sorteos para este minuto
+    // 8. Generar tickets gratis para los ganadores del premio "freePrize"
+    for (const ticket of results.freePrize) {
+      if (ticket.userId && ticket.userId !== 'anonymous' && ticket.userId !== 'temp') {
+        // Generar un nuevo ticket gratis con números aleatorios
+        const freeTicketNumbers = generateRandomEmojis(4);
+        
+        await db.collection(TICKETS_COLLECTION).add({
+          numbers: freeTicketNumbers,
+          timestamp: FieldValue.serverTimestamp(),
+          userId: ticket.userId,
+          isFreeTicket: true,
+          wonFrom: ticket.id
+        });
+        
+        logger.info(`Ticket gratis generado para usuario ${ticket.userId}`);
+      }
+    }
+    
+    // 9. Actualizar el control de sorteos para este minuto como completado
     await drawControlRef.set({
       timestamp: FieldValue.serverTimestamp(),
       inProgress: false,
       completed: true,
-      resultId: gameResultId
+      resultId: gameResultId,
+      completedAt: new Date().toISOString()
     });
     
     logger.info("Sorteo procesado con éxito con ID:", gameResultId);
     
-    return { success: true };
+    return { success: true, resultId: gameResultId };
   } catch (error) {
     logger.error("Error procesando el sorteo:", error);
     return { success: false, error: error.message };

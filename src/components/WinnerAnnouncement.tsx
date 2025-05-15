@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket } from '../types';
-import { Trophy, Award, Medal } from 'lucide-react';
+import { Trophy, Award, Medal, Ticket as TicketIcon } from 'lucide-react';
 
 interface WinnerAnnouncementProps {
   winningNumbers: string[];
   firstPrize: Ticket[];
   secondPrize: Ticket[];
   thirdPrize: Ticket[];
+  freePrize?: Ticket[];
   currentUserId?: string;
 }
 
@@ -15,6 +16,7 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
   firstPrize,
   secondPrize,
   thirdPrize,
+  freePrize = [],
   currentUserId
 }) => {
   const [showConfetti, setShowConfetti] = useState(false);
@@ -23,15 +25,32 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
   const userWonFirstPrize = currentUserId && firstPrize.some(ticket => ticket.userId === currentUserId);
   const userWonSecondPrize = currentUserId && secondPrize.some(ticket => ticket.userId === currentUserId);
   const userWonThirdPrize = currentUserId && thirdPrize.some(ticket => ticket.userId === currentUserId);
+  const userWonFreePrize = currentUserId && freePrize.some(ticket => ticket.userId === currentUserId);
   
   // Mostrar confeti si el usuario ha ganado
   useEffect(() => {
-    if (userWonFirstPrize || userWonSecondPrize || userWonThirdPrize) {
+    if (userWonFirstPrize || userWonSecondPrize || userWonThirdPrize || userWonFreePrize) {
       setShowConfetti(true);
       const timer = setTimeout(() => setShowConfetti(false), 5000);
       return () => clearTimeout(timer);
     }
-  }, [userWonFirstPrize, userWonSecondPrize, userWonThirdPrize]);
+  }, [userWonFirstPrize, userWonSecondPrize, userWonThirdPrize, userWonFreePrize]);
+
+  // Función para mostrar la descripción del premio
+  const getPrizeDescription = (prizeType: string) => {
+    switch (prizeType) {
+      case 'first':
+        return '4 aciertos en orden exacto';
+      case 'second':
+        return '3 aciertos en orden exacto';
+      case 'third':
+        return '4 aciertos en cualquier orden';
+      case 'free':
+        return '3 aciertos en cualquier orden';
+      default:
+        return '';
+    }
+  };
 
   return (
     <div className="mb-8 p-6 bg-white/90 rounded-xl backdrop-blur-sm shadow-xl">
@@ -52,7 +71,7 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
         </div>
       </div>
       
-      {(firstPrize.length > 0 || secondPrize.length > 0 || thirdPrize.length > 0) && (
+      {(firstPrize.length > 0 || secondPrize.length > 0 || thirdPrize.length > 0 || freePrize.length > 0) && (
         <div className="mb-4">
           <h3 className="text-xl font-bold text-center mb-3">¡Ganadores!</h3>
           
@@ -60,6 +79,9 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
             <div className={`p-3 rounded-lg mb-2 ${userWonFirstPrize ? 'bg-yellow-100 border-2 border-yellow-400' : 'bg-gray-100'}`}>
               <div className="flex items-center justify-center font-bold text-xl text-yellow-600 mb-2">
                 <Trophy className="mr-2" /> Primer Premio
+              </div>
+              <div className="text-center text-sm text-gray-600 mb-2">
+                {getPrizeDescription('first')}
               </div>
               <div className="flex flex-wrap justify-center gap-2">
                 {firstPrize.map(ticket => (
@@ -80,6 +102,9 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
               <div className="flex items-center justify-center font-bold text-lg text-gray-600 mb-2">
                 <Award className="mr-2" /> Segundo Premio
               </div>
+              <div className="text-center text-sm text-gray-600 mb-2">
+                {getPrizeDescription('second')}
+              </div>
               <div className="flex flex-wrap justify-center gap-2">
                 {secondPrize.map(ticket => (
                   <div 
@@ -95,9 +120,12 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
           )}
           
           {thirdPrize.length > 0 && (
-            <div className={`p-3 rounded-lg ${userWonThirdPrize ? 'bg-orange-100 border-2 border-orange-300' : 'bg-gray-100'}`}>
+            <div className={`p-3 rounded-lg mb-2 ${userWonThirdPrize ? 'bg-orange-100 border-2 border-orange-300' : 'bg-gray-100'}`}>
               <div className="flex items-center justify-center font-bold text-lg text-orange-600 mb-2">
                 <Medal className="mr-2" /> Tercer Premio
+              </div>
+              <div className="text-center text-sm text-gray-600 mb-2">
+                {getPrizeDescription('third')}
               </div>
               <div className="flex flex-wrap justify-center gap-2">
                 {thirdPrize.map(ticket => (
@@ -112,10 +140,32 @@ export const WinnerAnnouncement: React.FC<WinnerAnnouncementProps> = ({
               </div>
             </div>
           )}
+          
+          {freePrize.length > 0 && (
+            <div className={`p-3 rounded-lg ${userWonFreePrize ? 'bg-blue-100 border-2 border-blue-300' : 'bg-gray-100'}`}>
+              <div className="flex items-center justify-center font-bold text-lg text-blue-600 mb-2">
+                <TicketIcon className="mr-2" /> Ticket Gratis
+              </div>
+              <div className="text-center text-sm text-gray-600 mb-2">
+                {getPrizeDescription('free')}
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                {freePrize.map(ticket => (
+                  <div 
+                    key={ticket.id}
+                    className={`p-2 rounded ${ticket.userId === currentUserId ? 'bg-blue-200 font-bold' : 'bg-gray-50'}`}
+                  >
+                    {ticket.numbers.join(' ')}
+                    {ticket.userId === currentUserId && ' (¡TÚ!)'}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       
-      {!firstPrize.length && !secondPrize.length && !thirdPrize.length && (
+      {!firstPrize.length && !secondPrize.length && !thirdPrize.length && !freePrize.length && (
         <div className="text-center text-gray-700">
           No hubo ganadores en este sorteo. ¡Prueba suerte en el próximo!
         </div>

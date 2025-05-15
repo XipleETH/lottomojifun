@@ -28,6 +28,7 @@ export interface GameResult {
   firstPrize: Ticket[];
   secondPrize: Ticket[];
   thirdPrize: Ticket[];
+  freePrize: Ticket[];
 }
 
 export interface GameState {
@@ -37,6 +38,7 @@ export interface GameState {
     firstPrize: Ticket[];
     secondPrize: Ticket[];
     thirdPrize: Ticket[];
+    freePrize: Ticket[];
   };
   gameStarted: boolean;
   timeRemaining?: number;

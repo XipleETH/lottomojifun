@@ -92,6 +92,7 @@ function App() {
           firstPrize={gameState.lastResults?.firstPrize || []}
           secondPrize={gameState.lastResults?.secondPrize || []}
           thirdPrize={gameState.lastResults?.thirdPrize || []}
+          freePrize={gameState.lastResults?.freePrize || []}
           currentUserId={user?.id}
         />
 
@@ -134,7 +135,8 @@ function App() {
               isWinner={
                 gameState.lastResults?.firstPrize.includes(ticket) ? 'first' :
                 gameState.lastResults?.secondPrize.includes(ticket) ? 'second' :
-                gameState.lastResults?.thirdPrize.includes(ticket) ? 'third' : null
+                gameState.lastResults?.thirdPrize.includes(ticket) ? 'third' : 
+                gameState.lastResults?.freePrize.includes(ticket) ? 'free' : null
               }
             />
           ))}
