@@ -100,7 +100,28 @@ const processGameDraw = async () => {
   try {
     logger.info(`[${processId}] Procesando sorteo del juego para el minuto ${currentMinute}...`);
     
-    // 1. Verificar si ya se procesó un sorteo para este minuto
+    // 1. Verificar primero si ya existe un resultado en game_results para este minuto
+    // (verificación adicional para evitar duplicados)
+    const minuteStart = new Date(now);
+    minuteStart.setSeconds(0);
+    minuteStart.setMilliseconds(0);
+    
+    const minuteEnd = new Date(minuteStart);
+    minuteEnd.setMinutes(minuteStart.getMinutes() + 1);
+    
+    const existingResultsQuery = db.collection(GAME_RESULTS_COLLECTION)
+      .where('minuteKey', '==', currentMinute)
+      .limit(1);
+    
+    const existingResults = await existingResultsQuery.get();
+    
+    if (!existingResults.empty) {
+      const existingResult = existingResults.docs[0];
+      logger.info(`[${processId}] Ya existe un resultado para el minuto ${currentMinute} con ID: ${existingResult.id}`);
+      return { success: true, alreadyProcessed: true, resultId: existingResult.id };
+    }
+    
+    // 2. Verificar si ya se procesó un sorteo para este minuto usando draw_control
     
     // Usar transacción para evitar condiciones de carrera
     const result = await db.runTransaction(async (transaction) => {
@@ -153,17 +174,17 @@ const processGameDraw = async () => {
       return { success: false };
     }
     
-    // 2. Generar números ganadores
+    // 3. Generar números ganadores
     const winningNumbers = generateRandomEmojis(4);
     logger.info(`[${processId}] Números ganadores generados:`, winningNumbers);
     
-    // 3. Calcular próximo sorteo
+    // 4. Calcular próximo sorteo
     const nextMinute = new Date(now);
     nextMinute.setMinutes(now.getMinutes() + 1);
     nextMinute.setSeconds(0);
     nextMinute.setMilliseconds(0);
     
-    // 4. Actualizar estado del juego
+    // 5. Actualizar estado del juego
     await db.collection('game_state').doc(GAME_STATE_DOC).set({
       winningNumbers,
       nextDrawTime: Timestamp.fromDate(nextMinute),
@@ -171,7 +192,7 @@ const processGameDraw = async () => {
       lastProcessId: processId
     });
     
-    // 5. Obtener tickets activos
+    // 6. Obtener tickets activos
     const ticketsSnapshot = await db.collection(TICKETS_COLLECTION).get();
     const tickets = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -180,7 +201,7 @@ const processGameDraw = async () => {
     
     logger.info(`[${processId}] Procesando ${tickets.length} tickets`);
     
-    // 6. Comprobar ganadores con los nuevos criterios
+    // 7. Comprobar ganadores con los nuevos criterios
     const results = {
       firstPrize: [],
       secondPrize: [],
@@ -205,7 +226,7 @@ const processGameDraw = async () => {
       freePrize: results.freePrize.length
     });
     
-    // 7. Guardar resultado
+    // 8. Guardar resultado
     const gameResultId = Date.now().toString();
     
     // Preparar datos serializables para Firestore
@@ -215,6 +236,7 @@ const processGameDraw = async () => {
       dateTime: new Date().toISOString(), // Fecha legible como respaldo
       winningNumbers,
       processId: processId,
+      minuteKey: currentMinute, // Guardar la clave del minuto para facilitar la verificación
       firstPrize: results.firstPrize.map(ticket => ({
         id: ticket.id,
         numbers: ticket.numbers,
@@ -244,7 +266,7 @@ const processGameDraw = async () => {
     // Guardar el resultado en Firestore
     await db.collection(GAME_RESULTS_COLLECTION).doc(gameResultId).set(serializableResult);
     
-    // 8. Generar tickets gratis para los ganadores del premio "freePrize"
+    // 9. Generar tickets gratis para los ganadores del premio "freePrize"
     for (const ticket of results.freePrize) {
       if (ticket.userId && ticket.userId !== 'anonymous' && ticket.userId !== 'temp') {
         // Generar un nuevo ticket gratis con números aleatorios
@@ -262,7 +284,7 @@ const processGameDraw = async () => {
       }
     }
     
-    // 9. Actualizar el control de sorteos para este minuto como completado
+    // 10. Actualizar el control de sorteos para este minuto como completado
     await drawControlRef.set({
       timestamp: FieldValue.serverTimestamp(),
       inProgress: false,

@@ -15,9 +15,13 @@ const initialGameState: GameState = {
 
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
+  const processedResultsRef = useRef<Set<string>>(new Set());
+  const lastProcessedMinuteRef = useRef<string>('');
 
   // Suscribirse a los tickets del usuario y al estado del juego
   useEffect(() => {
+    console.log('[useGameState] Inicializando suscripciones...');
+    
     // Suscribirse a los tickets del usuario
     const unsubscribeTickets = subscribeToUserTickets((tickets) => {
       setGameState(prev => ({
@@ -35,32 +39,54 @@ export function useGameState() {
     });
 
     return () => {
+      console.log('[useGameState] Limpiando suscripciones de tickets y estado del juego');
       unsubscribeTickets();
       unsubscribeState();
     };
   }, []);
 
+  // Función para obtener la clave de minuto de un timestamp
+  const getMinuteKey = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
+  };
+
   // Suscribirse a los resultados del juego en Firebase
   useEffect(() => {
+    console.log('[useGameState] Inicializando suscripción a resultados del juego');
     const unsubscribe = subscribeToGameResults((results) => {
       if (results.length > 0) {
         const latestResult = results[0]; // El primer resultado es el más reciente
-        console.log('Nuevo resultado recibido de Firebase:', latestResult);
         
-        setGameState(prev => ({
-          ...prev,
-          winningNumbers: latestResult.winningNumbers,
-          lastResults: {
-            firstPrize: latestResult.firstPrize,
-            secondPrize: latestResult.secondPrize,
-            thirdPrize: latestResult.thirdPrize,
-            freePrize: latestResult.freePrize || [] // Compatibilidad con resultados antiguos
-          }
-        }));
+        // Solo procesar si es un resultado nuevo que no hemos visto antes
+        const resultMinute = getMinuteKey(latestResult.timestamp);
+        const resultId = latestResult.id || 'unknown';
+        
+        if (!processedResultsRef.current.has(resultId) && resultMinute !== lastProcessedMinuteRef.current) {
+          console.log(`[useGameState] Nuevo resultado recibido para el minuto ${resultMinute} con ID: ${resultId}`, latestResult);
+          processedResultsRef.current.add(resultId);
+          lastProcessedMinuteRef.current = resultMinute;
+          
+          setGameState(prev => ({
+            ...prev,
+            winningNumbers: latestResult.winningNumbers,
+            lastResults: {
+              firstPrize: latestResult.firstPrize,
+              secondPrize: latestResult.secondPrize,
+              thirdPrize: latestResult.thirdPrize,
+              freePrize: latestResult.freePrize || [] // Compatibilidad con resultados antiguos
+            }
+          }));
+        } else {
+          console.log(`[useGameState] Ignorando resultado ya procesado para el minuto ${resultMinute} con ID: ${resultId}`);
+        }
       }
     });
     
-    return () => unsubscribe();
+    return () => {
+      console.log('[useGameState] Limpiando suscripción a resultados del juego');
+      unsubscribe();
+    };
   }, []);
 
   // Esta función se llama cuando termina el temporizador
@@ -78,7 +104,7 @@ export function useGameState() {
 
   // Función para forzar un sorteo manualmente
   const forceGameDraw = useCallback(() => {
-    console.log('Forzando sorteo manual...');
+    console.log('[useGameState] Forzando sorteo manual...');
     requestManualGameDraw();
   }, []);
 

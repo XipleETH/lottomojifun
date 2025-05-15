@@ -123,6 +123,11 @@ export const subscribeToGameResults = (
   callback: (results: GameResult[]) => void
 ) => {
   try {
+    console.log('[subscribeToGameResults] Configurando suscripción a resultados del juego');
+    
+    // Usar un mapa para evitar resultados duplicados en el mismo minuto
+    const resultsByMinute = new Map<string, GameResult>();
+    
     const resultsQuery = query(
       collection(db, GAME_RESULTS_COLLECTION),
       orderBy('timestamp', 'desc'),
@@ -131,26 +136,59 @@ export const subscribeToGameResults = (
     
     return onSnapshot(resultsQuery, (snapshot) => {
       try {
-        const results = snapshot.docs.map(doc => {
+        // Registrar los cambios para diagnóstico
+        if (snapshot.docChanges().length > 0) {
+          console.log(`[subscribeToGameResults] Cambios detectados: ${snapshot.docChanges().length} documentos`);
+          
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              console.log(`[subscribeToGameResults] Documento añadido: ${change.doc.id}`);
+            } else if (change.type === 'modified') {
+              console.log(`[subscribeToGameResults] Documento modificado: ${change.doc.id}`);
+            }
+          });
+        }
+        
+        // Procesar todos los documentos
+        const results: GameResult[] = [];
+        
+        snapshot.docs.forEach(doc => {
           try {
-            return mapFirestoreGameResult(doc);
+            const result = mapFirestoreGameResult(doc);
+            
+            // Obtener clave de minuto para agrupar resultados
+            const date = new Date(result.timestamp);
+            const minuteKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
+            
+            // Solo almacenar un resultado por minuto (el primero que recibimos)
+            if (!resultsByMinute.has(minuteKey)) {
+              resultsByMinute.set(minuteKey, result);
+              results.push(result);
+            }
           } catch (error) {
-            console.error('Error mapping document:', error, doc.id);
-            return null;
+            console.error(`[subscribeToGameResults] Error mapeando documento ${doc.id}:`, error);
           }
-        }).filter(result => result !== null) as GameResult[];
+        });
+        
+        // Ordenar por timestamp (más reciente primero)
+        results.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Mostrar un log de diagnóstico
+        if (results.length > 0) {
+          console.log(`[subscribeToGameResults] Procesados ${results.length} resultados únicos (por minuto)`);
+        }
         
         callback(results);
       } catch (error) {
-        console.error('Error processing snapshot:', error);
+        console.error('[subscribeToGameResults] Error procesando snapshot:', error);
         callback([]);
       }
     }, (error) => {
-      console.error('Error in subscribeToGameResults:', error);
+      console.error('[subscribeToGameResults] Error en suscripción:', error);
       callback([]);
     });
   } catch (error) {
-    console.error('Error setting up game results subscription:', error);
+    console.error('[subscribeToGameResults] Error configurando suscripción:', error);
     return () => {}; // Unsubscribe no-op
   }
 };
