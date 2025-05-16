@@ -4,26 +4,40 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title LottoMojiFun
- * @dev Contrato para la lotería de emojis en la red Base, integrado con Farcaster
+ * @dev Contrato de lotería para la red Base con sorteos cada 10 minutos
+ * Permite a los usuarios comprar tickets por 1 USDC
+ * Los premios se distribuyen a los ganadores con un 5% para una billetera de desarrollo
  */
 contract LottoMojiFun is Ownable, ReentrancyGuard {
-    using ECDSA for bytes32;
+    // Referencia al token USDC en la red Base
+    IERC20 public usdcToken;
     
-    // === CONSTANTES ===
+    // Constantes
     uint256 public constant TICKET_PRICE = 1 * 10**6; // 1 USDC (6 decimales)
     uint256 public constant DEV_FEE_PERCENT = 5; // 5% para desarrollo
-    uint256 public constant RESERVE_POOL_PERCENT = 10; // 10% para pool de reserva
-    uint256 public constant FIRST_PRIZE_PERCENT = 70; // 70% para primer premio
-    uint256 public constant SECOND_PRIZE_PERCENT = 10; // 10% para segundo premio
-    uint256 public constant THIRD_PRIZE_PERCENT = 5; // 5% para tercer premio
-    uint256 public constant MAX_EMOJIS_PER_TICKET = 4;
+    uint256 public constant MAX_EMOJIS_PER_TICKET = 5; // Máximo 5 emojis por ticket
+    uint256 public constant DRAW_INTERVAL = 10 minutes; // Intervalo de 10 minutos entre sorteos
     
-    // === ESTRUCTURAS DE DATOS ===
+    // Porcentajes de premios
+    uint256 public constant FIRST_PRIZE_PERCENT = 50; // 50% para primer premio
+    uint256 public constant SECOND_PRIZE_PERCENT = 25; // 25% para segundo premio
+    uint256 public constant THIRD_PRIZE_PERCENT = 15; // 15% para tercer premio
+    uint256 public constant RESERVE_POOL_PERCENT = 5; // 5% para el fondo de reserva
+    
+    // Variables de estado
+    address public devWallet;
+    uint256 public currentDrawId;
+    uint256 public nextTicketId;
+    uint256 public totalTicketsSold;
+    uint256 public accumulatedDevFees;
+    uint256 public reservePool;
+    uint256 public lastDrawTime;
+    uint256 public nextDrawTime;
+    
+    // Estructura para los tickets
     struct Ticket {
         uint256 id;
         address owner;
@@ -34,6 +48,7 @@ contract LottoMojiFun is Ownable, ReentrancyGuard {
         uint256 fid; // Farcaster ID
     }
     
+    // Estructura para los resultados del sorteo
     struct DrawResult {
         uint256 id;
         string[] winningEmojis;
@@ -46,63 +61,78 @@ contract LottoMojiFun is Ownable, ReentrancyGuard {
         uint256 fourthPrizeWinners;
     }
     
-    // === VARIABLES DE ESTADO ===
-    IERC20 public usdcToken;
-    address public devWallet;
-    uint256 public currentDrawId;
-    uint256 public nextTicketId;
-    uint256 public totalTicketsSold;
-    uint256 public accumulatedDevFees;
-    uint256 public reservePool;
-    
     // Mapeos
-    mapping(uint256 => DrawResult) public draws;
+    mapping(uint256 => DrawResult) private draws;
     mapping(uint256 => Ticket) public tickets;
     mapping(uint256 => uint256[]) public drawTickets;
-    mapping(address => uint256[]) public userTickets;
-    mapping(uint256 => mapping(address => uint256[])) public userDrawTickets;
+    mapping(address => uint256[]) private userTickets;
+    mapping(uint256 => mapping(address => uint256[])) private userDrawTickets;
     mapping(uint256 => uint256) public prizePoolForDraw;
-    
-    // Mapeos para rastrear ganadores
-    mapping(uint256 => address[]) public firstPrizeWinners;
+    mapping(uint256 => address[]) private firstPrizeWinners;
     mapping(uint256 => address[]) public secondPrizeWinners;
     mapping(uint256 => address[]) public thirdPrizeWinners;
-    mapping(uint256 => address[]) public fourthPrizeWinners;
+    mapping(uint256 => address[]) private fourthPrizeWinners;
     mapping(uint256 => mapping(address => bool)) public hasClaimedPrize;
     
-    // === EVENTOS ===
-    event TicketPurchased(uint256 indexed ticketId, address indexed buyer, uint256 fid, string[] emojis, uint256 drawId);
-    event DrawCompleted(uint256 indexed drawId, string[] winningEmojis, uint256 prizePool, uint256 timestamp);
-    event PrizeClaimed(uint256 indexed ticketId, address indexed winner, uint256 amount, uint256 prizeCategory);
-    event DevFeesWithdrawn(uint256 amount);
-    event ReservePoolUpdated(uint256 amount);
+    // Eventos
+    event TicketPurchased(
+        uint256 indexed ticketId,
+        address indexed buyer,
+        uint256 fid,
+        string[] emojis,
+        uint256 drawId
+    );
     
-    // === CONSTRUCTOR ===
+    event DrawCompleted(
+        uint256 indexed drawId,
+        string[] winningEmojis,
+        uint256 prizePool,
+        uint256 timestamp
+    );
+    
+    event PrizeClaimed(
+        uint256 indexed ticketId,
+        address indexed winner,
+        uint256 amount,
+        uint256 prizeCategory
+    );
+    
+    event DevFeesWithdrawn(uint256 amount);
+    
+    // Constructor
     constructor(address _usdcToken, address _devWallet) Ownable(msg.sender) {
         usdcToken = IERC20(_usdcToken);
         devWallet = _devWallet;
         currentDrawId = 1;
         nextTicketId = 1;
-        reservePool = 0;
+        
+        // Inicializar el tiempo del próximo sorteo
+        lastDrawTime = block.timestamp;
+        nextDrawTime = block.timestamp + DRAW_INTERVAL;
     }
     
-    // === FUNCIONES PRINCIPALES ===
-    
     /**
-     * @dev Compra un ticket para la lotería actual
-     * @param emojis Array de emojis seleccionados para el ticket
-     * @param fid ID de Farcaster del comprador
+     * @dev Compra un ticket para la lotería
+     * @param emojis Array de emojis seleccionados por el usuario
+     * @param fid ID de Farcaster del usuario
      */
-    function buyTicket(string[] memory emojis, uint256 fid) external nonReentrant {
-        require(emojis.length == MAX_EMOJIS_PER_TICKET, "Debe seleccionar exactamente 4 emojis");
-        require(fid > 0, "FID invalido");
+    function buyTicket(string[] calldata emojis, uint256 fid) external nonReentrant {
+        // Verificaciones
+        require(emojis.length > 0 && emojis.length <= MAX_EMOJIS_PER_TICKET, "Numero invalido de emojis");
         
         // Transferir USDC al contrato
-        bool success = usdcToken.transferFrom(msg.sender, address(this), TICKET_PRICE);
-        require(success, "Fallo la transferencia de USDC");
+        require(usdcToken.transferFrom(msg.sender, address(this), TICKET_PRICE), "Fallo la transferencia de USDC");
         
-        // Crear el ticket
-        uint256 ticketId = nextTicketId++;
+        // Calcular distribución
+        uint256 devFee = (TICKET_PRICE * DEV_FEE_PERCENT) / 100;
+        uint256 prizeAmount = TICKET_PRICE - devFee;
+        
+        // Actualizar estado
+        accumulatedDevFees += devFee;
+        prizePoolForDraw[currentDrawId] += prizeAmount;
+        
+        // Crear ticket
+        uint256 ticketId = nextTicketId;
         tickets[ticketId] = Ticket({
             id: ticketId,
             owner: msg.sender,
@@ -118,224 +148,296 @@ contract LottoMojiFun is Ownable, ReentrancyGuard {
         userTickets[msg.sender].push(ticketId);
         userDrawTickets[currentDrawId][msg.sender].push(ticketId);
         
-        // Actualizar fondos del sorteo
-        uint256 devFee = (TICKET_PRICE * DEV_FEE_PERCENT) / 100;
-        uint256 reserveFee = (TICKET_PRICE * RESERVE_POOL_PERCENT) / 100;
-        uint256 prizeAmount = TICKET_PRICE - devFee - reserveFee;
-        
-        prizePoolForDraw[currentDrawId] += prizeAmount;
-        accumulatedDevFees += devFee;
-        reservePool += reserveFee;
+        // Incrementar counters
+        nextTicketId++;
         totalTicketsSold++;
         
+        // Emitir evento
         emit TicketPurchased(ticketId, msg.sender, fid, emojis, currentDrawId);
     }
     
     /**
-     * @dev Función interna para verificar coincidencias con posición exacta
-     */
-    function _checkExactPositionMatches(string[] memory ticketEmojis, string[] memory winningEmojis) internal pure returns (uint256 matchCount) {
-        require(ticketEmojis.length == winningEmojis.length, "Arrays deben tener la misma longitud");
-        
-        for (uint256 i = 0; i < ticketEmojis.length; i++) {
-            if (keccak256(bytes(ticketEmojis[i])) == keccak256(bytes(winningEmojis[i]))) {
-                matchCount++;
-            }
-        }
-        return matchCount;
-    }
-
-    /**
-     * @dev Función interna para verificar coincidencias sin importar posición
-     */
-    function _checkAnyPositionMatches(string[] memory ticketEmojis, string[] memory winningEmojis) internal pure returns (uint256 matchCount) {
-        // Crear copia de los arrays para marcar emojis ya contados
-        bool[] memory ticketCounted = new bool[](ticketEmojis.length);
-        bool[] memory winningCounted = new bool[](winningEmojis.length);
-        
-        for (uint256 i = 0; i < ticketEmojis.length; i++) {
-            if (ticketCounted[i]) continue;
-            
-            for (uint256 j = 0; j < winningEmojis.length; j++) {
-                if (winningCounted[j]) continue;
-                
-                if (keccak256(bytes(ticketEmojis[i])) == keccak256(bytes(winningEmojis[j]))) {
-                    matchCount++;
-                    ticketCounted[i] = true;
-                    winningCounted[j] = true;
-                    break;
-                }
-            }
-        }
-        return matchCount;
-    }
-    
-    /**
-     * @dev Finaliza el sorteo actual y comienza uno nuevo
-     * @param winningEmojis Emojis ganadores seleccionados
-     * @param randomSeed Semilla para verificación (opcional)
+     * @dev Completa un sorteo
+     * @param winningEmojis Array de emojis ganadores
+     * @param randomSeed Semilla aleatoria para la selección de ganadores
      */
     function completeDraw(string[] memory winningEmojis, bytes32 randomSeed) external onlyOwner {
-        require(winningEmojis.length == MAX_EMOJIS_PER_TICKET, "Debe haber exactamente 4 emojis ganadores");
+        require(winningEmojis.length > 0 && winningEmojis.length <= MAX_EMOJIS_PER_TICKET, "Numero invalido de emojis");
+        require(block.timestamp >= nextDrawTime, "Aun no es tiempo para el sorteo");
         
         uint256 drawId = currentDrawId;
         uint256 prizePool = prizePoolForDraw[drawId];
         
-        // Identificar ganadores para este sorteo
-        uint256 firstWinners = 0;
-        uint256 secondWinners = 0;
-        uint256 thirdWinners = 0;
-        uint256 fourthWinners = 0;
-        
-        uint256[] memory ticketsInDraw = drawTickets[drawId];
-        for(uint256 i = 0; i < ticketsInDraw.length; i++) {
-            uint256 ticketId = ticketsInDraw[i];
-            Ticket storage ticket = tickets[ticketId];
+        // Si no hay tickets vendidos, transferir todo al fondo de reserva
+        if (drawTickets[drawId].length == 0) {
+            reservePool += prizePool;
+            prizePoolForDraw[drawId] = 0;
             
-            // Verificar coincidencias exactas (misma posición)
-            uint256 exactMatches = _checkExactPositionMatches(ticket.emojis, winningEmojis);
+            // Preparar para el siguiente sorteo
+            currentDrawId++;
+            lastDrawTime = block.timestamp;
+            nextDrawTime = block.timestamp + DRAW_INTERVAL;
             
-            // Verificar coincidencias en cualquier posición
-            uint256 anyMatches = _checkAnyPositionMatches(ticket.emojis, winningEmojis);
+            // Registrar el sorteo vacío
+            draws[drawId] = DrawResult({
+                id: drawId,
+                winningEmojis: winningEmojis,
+                prizePool: prizePool,
+                timestamp: block.timestamp,
+                completed: true,
+                firstPrizeWinners: 0,
+                secondPrizeWinners: 0,
+                thirdPrizeWinners: 0,
+                fourthPrizeWinners: 0
+            });
             
-            if (exactMatches == 4) {
-                // Primer premio: 4 emojis exactos en misma posición
-                firstPrizeWinners[drawId].push(ticket.owner);
-                firstWinners++;
-            } else if (anyMatches == 4) {
-                // Segundo premio: 4 emojis iguales en cualquier posición
-                secondPrizeWinners[drawId].push(ticket.owner);
-                secondWinners++;
-            } else if (exactMatches == 3) {
-                // Tercer premio: 3 emojis exactos en misma posición
-                thirdPrizeWinners[drawId].push(ticket.owner);
-                thirdWinners++;
-            } else if (anyMatches == 3) {
-                // Premio de consolación: 3 emojis iguales en cualquier posición
-                fourthPrizeWinners[drawId].push(ticket.owner);
-                fourthWinners++;
-            }
+            emit DrawCompleted(drawId, winningEmojis, prizePool, block.timestamp);
+            return;
         }
         
-        // Registrar resultados
+        // Determinar ganadores
+        (
+            address[] memory first,
+            address[] memory second,
+            address[] memory third,
+            address[] memory fourth
+        ) = _determineWinners(drawId, winningEmojis, randomSeed);
+        
+        // Guardar ganadores
+        firstPrizeWinners[drawId] = first;
+        secondPrizeWinners[drawId] = second;
+        thirdPrizeWinners[drawId] = third;
+        fourthPrizeWinners[drawId] = fourth;
+        
+        // Registrar el sorteo
         draws[drawId] = DrawResult({
             id: drawId,
             winningEmojis: winningEmojis,
             prizePool: prizePool,
             timestamp: block.timestamp,
             completed: true,
-            firstPrizeWinners: firstWinners,
-            secondPrizeWinners: secondWinners,
-            thirdPrizeWinners: thirdWinners,
-            fourthPrizeWinners: fourthWinners
+            firstPrizeWinners: first.length,
+            secondPrizeWinners: second.length,
+            thirdPrizeWinners: third.length,
+            fourthPrizeWinners: fourth.length
         });
         
-        // Iniciar nuevo sorteo y añadir la reserva al nuevo pozo si hubo ganador del primer premio
+        // Preparar para el siguiente sorteo
         currentDrawId++;
-        if(firstWinners > 0 && reservePool > 0) {
-            prizePoolForDraw[currentDrawId] = reservePool;
-            emit ReservePoolUpdated(0);
-            reservePool = 0;
-        }
+        lastDrawTime = block.timestamp;
+        nextDrawTime = block.timestamp + DRAW_INTERVAL;
         
+        // Emitir evento
         emit DrawCompleted(drawId, winningEmojis, prizePool, block.timestamp);
     }
     
     /**
-     * @dev Comprueba si un ticket es ganador y en qué categoría
-     * @param ticketId ID del ticket a comprobar
-     * @return prizeCategory Categoría del premio (1-4, 0 si no es ganador)
+     * @dev Determina los ganadores de un sorteo
+     * @param drawId ID del sorteo
+     * @param winningEmojis Emojis ganadores
+     * @param randomSeed Semilla aleatoria
+     */
+    function _determineWinners(
+        uint256 drawId,
+        string[] memory winningEmojis,
+        bytes32 randomSeed
+    ) internal view returns (
+        address[] memory firstPrize,
+        address[] memory secondPrize,
+        address[] memory thirdPrize,
+        address[] memory fourthPrize
+    ) {
+        uint256 numTickets = drawTickets[drawId].length;
+        address[] memory firstTemp = new address[](numTickets);
+        address[] memory secondTemp = new address[](numTickets);
+        address[] memory thirdTemp = new address[](numTickets);
+        address[] memory fourthTemp = new address[](numTickets);
+        
+        uint256 firstCount = 0;
+        uint256 secondCount = 0;
+        uint256 thirdCount = 0;
+        uint256 fourthCount = 0;
+        
+        // Evaluar cada ticket
+        for (uint256 i = 0; i < numTickets; i++) {
+            uint256 ticketId = drawTickets[drawId][i];
+            Ticket storage ticket = tickets[ticketId];
+            
+            // Contar coincidencias
+            uint256 matches = _countMatches(ticket.emojis, winningEmojis);
+            
+            // Clasificar según el número de coincidencias
+            if (matches >= 4) {
+                firstTemp[firstCount] = ticket.owner;
+                firstCount++;
+            } else if (matches == 3) {
+                secondTemp[secondCount] = ticket.owner;
+                secondCount++;
+            } else if (matches == 2) {
+                thirdTemp[thirdCount] = ticket.owner;
+                thirdCount++;
+            } else if (matches == 1) {
+                fourthTemp[fourthCount] = ticket.owner;
+                fourthCount++;
+            }
+        }
+        
+        // Redimensionar los arrays de resultados
+        firstPrize = new address[](firstCount);
+        secondPrize = new address[](secondCount);
+        thirdPrize = new address[](thirdCount);
+        fourthPrize = new address[](fourthCount);
+        
+        for (uint256 i = 0; i < firstCount; i++) {
+            firstPrize[i] = firstTemp[i];
+        }
+        
+        for (uint256 i = 0; i < secondCount; i++) {
+            secondPrize[i] = secondTemp[i];
+        }
+        
+        for (uint256 i = 0; i < thirdCount; i++) {
+            thirdPrize[i] = thirdTemp[i];
+        }
+        
+        for (uint256 i = 0; i < fourthCount; i++) {
+            fourthPrize[i] = fourthTemp[i];
+        }
+        
+        return (firstPrize, secondPrize, thirdPrize, fourthPrize);
+    }
+    
+    /**
+     * @dev Cuenta las coincidencias entre los emojis del ticket y los ganadores
+     * @param ticketEmojis Emojis del ticket
+     * @param winningEmojis Emojis ganadores
+     */
+    function _countMatches(
+        string[] storage ticketEmojis,
+        string[] memory winningEmojis
+    ) internal view returns (uint256) {
+        uint256 matches = 0;
+        
+        for (uint256 i = 0; i < ticketEmojis.length; i++) {
+            for (uint256 j = 0; j < winningEmojis.length; j++) {
+                // Comparar las cadenas
+                if (_compareStrings(ticketEmojis[i], winningEmojis[j])) {
+                    matches++;
+                    break;
+                }
+            }
+        }
+        
+        return matches;
+    }
+    
+    /**
+     * @dev Compara dos strings
+     */
+    function _compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
+    }
+    
+    /**
+     * @dev Verifica la categoría de premio de un ticket
+     * @param ticketId ID del ticket
      */
     function checkTicketPrizeCategory(uint256 ticketId) public view returns (uint256 prizeCategory) {
         Ticket storage ticket = tickets[ticketId];
         require(ticket.id > 0, "Ticket no existe");
-        require(draws[ticket.drawId].completed, "Sorteo aun no completado");
         
-        string[] memory winningEmojis = draws[ticket.drawId].winningEmojis;
+        uint256 drawId = ticket.drawId;
+        require(drawId < currentDrawId, "Sorteo aun no completado");
         
-        // Verificar coincidencias exactas (misma posición)
-        uint256 exactMatches = _checkExactPositionMatches(ticket.emojis, winningEmojis);
+        DrawResult storage draw = draws[drawId];
+        require(draw.completed, "Sorteo no completado");
         
-        // Verificar coincidencias en cualquier posición
-        uint256 anyMatches = _checkAnyPositionMatches(ticket.emojis, winningEmojis);
+        // Contar coincidencias
+        uint256 matches = _countMatches(ticket.emojis, draw.winningEmojis);
         
-        // Determinar categoría del premio
-        if (exactMatches == 4) {
-            // Primer premio: 4 emojis exactos en misma posición
-            return 1;
-        } else if (anyMatches == 4) {
-            // Segundo premio: 4 emojis iguales en cualquier posición
-            return 2;
-        } else if (exactMatches == 3) {
-            // Tercer premio: 3 emojis exactos en misma posición
-            return 3;
-        } else if (anyMatches == 3) {
-            // Premio de consolación: 3 emojis iguales en cualquier posición
-            return 4;
-        }
+        if (matches >= 4) return 1; // Primer premio
+        if (matches == 3) return 2; // Segundo premio
+        if (matches == 2) return 3; // Tercer premio
+        if (matches == 1) return 4; // Cuarto premio
         
-        return 0; // No es ganador
+        return 0; // Sin premio
     }
     
     /**
-     * @dev Permite a un usuario reclamar su premio
-     * @param ticketId ID del ticket ganador
+     * @dev Reclama el premio de un ticket
+     * @param ticketId ID del ticket
      */
     function claimPrize(uint256 ticketId) external nonReentrant {
         Ticket storage ticket = tickets[ticketId];
-        require(ticket.owner == msg.sender, "No eres el dueno del ticket");
+        require(ticket.id > 0, "Ticket no existe");
+        require(ticket.owner == msg.sender, "No eres el dueño");
+        require(ticket.drawId < currentDrawId, "Sorteo aun no completado");
         require(!ticket.claimed, "Premio ya reclamado");
-        require(draws[ticket.drawId].completed, "Sorteo aun no completado");
-        require(!hasClaimedPrize[ticket.drawId][msg.sender], "Ya reclamaste un premio para este sorteo");
+        require(!hasClaimedPrize[ticket.drawId][msg.sender], "Ya reclamaste un premio de este sorteo");
+        
+        uint256 drawId = ticket.drawId;
+        DrawResult storage draw = draws[drawId];
         
         uint256 prizeCategory = checkTicketPrizeCategory(ticketId);
-        require(prizeCategory > 0, "Ticket no ganador");
-        
-        uint256 prizeAmount = 0;
-        uint256 prizePool = draws[ticket.drawId].prizePool;
-        DrawResult storage draw = draws[ticket.drawId];
-        
-        // Calcular premio según categoría y dividir entre ganadores
-        if (prizeCategory == 1 && draw.firstPrizeWinners > 0) {
-            // Primer premio: 4 emojis exactos - 70% del pozo
-            prizeAmount = (prizePool * FIRST_PRIZE_PERCENT) / 100 / draw.firstPrizeWinners;
-        } else if (prizeCategory == 2 && draw.secondPrizeWinners > 0) {
-            // Segundo premio: 4 emojis en cualquier posición - 10% del pozo
-            prizeAmount = (prizePool * SECOND_PRIZE_PERCENT) / 100 / draw.secondPrizeWinners;
-        } else if (prizeCategory == 3 && draw.thirdPrizeWinners > 0) {
-            // Tercer premio: 3 emojis exactos - 5% del pozo
-            prizeAmount = (prizePool * THIRD_PRIZE_PERCENT) / 100 / draw.thirdPrizeWinners;
-        } else if (prizeCategory == 4) {
-            // Premio de consolación: 3 emojis en cualquier posición - ticket gratis
-            prizeAmount = TICKET_PRICE;
-        }
+        require(prizeCategory > 0, "No ganaste ningun premio");
         
         // Marcar como reclamado
         ticket.claimed = true;
-        hasClaimedPrize[ticket.drawId][msg.sender] = true;
+        hasClaimedPrize[drawId][msg.sender] = true;
+        
+        // Calcular premio según categoría
+        uint256 prizeAmount = 0;
+        
+        if (prizeCategory == 1) {
+            // Primer premio (50% dividido entre ganadores)
+            uint256 firstPrizePool = (draw.prizePool * FIRST_PRIZE_PERCENT) / 100;
+            prizeAmount = firstPrizePool / draws[drawId].firstPrizeWinners;
+        } else if (prizeCategory == 2) {
+            // Segundo premio (25% dividido entre ganadores)
+            uint256 secondPrizePool = (draw.prizePool * SECOND_PRIZE_PERCENT) / 100;
+            prizeAmount = secondPrizePool / draws[drawId].secondPrizeWinners;
+        } else if (prizeCategory == 3) {
+            // Tercer premio (15% dividido entre ganadores)
+            uint256 thirdPrizePool = (draw.prizePool * THIRD_PRIZE_PERCENT) / 100;
+            prizeAmount = thirdPrizePool / draws[drawId].thirdPrizeWinners;
+        } else if (prizeCategory == 4) {
+            // Para el cuarto premio, damos un ticket gratis (usando el fondo de reserva)
+            if (reservePool >= TICKET_PRICE) {
+                prizeAmount = TICKET_PRICE;
+                reservePool -= TICKET_PRICE;
+            }
+        }
         
         // Transferir premio
-        require(usdcToken.transfer(msg.sender, prizeAmount), "Fallo la transferencia del premio");
-        
-        emit PrizeClaimed(ticketId, msg.sender, prizeAmount, prizeCategory);
+        if (prizeAmount > 0) {
+            require(usdcToken.transfer(msg.sender, prizeAmount), "Fallo la transferencia del premio");
+            
+            // Reducir el premio del pool (excepto para categoría 4 que usa reservePool)
+            if (prizeCategory != 4) {
+                prizePoolForDraw[drawId] -= prizeAmount;
+            }
+            
+            // Emitir evento
+            emit PrizeClaimed(ticketId, msg.sender, prizeAmount, prizeCategory);
+        }
     }
     
     /**
-     * @dev Permite al propietario retirar las comisiones acumuladas
+     * @dev Retira las tarifas de desarrollo acumuladas
      */
-    function withdrawDevFees() external onlyOwner nonReentrant {
+    function withdrawDevFees() external onlyOwner {
         uint256 amount = accumulatedDevFees;
-        require(amount > 0, "No hay comisiones para retirar");
+        require(amount > 0, "No hay tarifas para retirar");
         
         accumulatedDevFees = 0;
-        require(usdcToken.transfer(devWallet, amount), "Fallo la transferencia de comisiones");
+        require(usdcToken.transfer(devWallet, amount), "Fallo la transferencia");
         
         emit DevFeesWithdrawn(amount);
     }
     
     /**
      * @dev Cambia la dirección de la billetera de desarrollo
-     * @param _newDevWallet Nueva dirección de la billetera de desarrollo
+     * @param _newDevWallet Nueva dirección
      */
     function setDevWallet(address _newDevWallet) external onlyOwner {
         require(_newDevWallet != address(0), "Direccion invalida");
@@ -343,69 +445,71 @@ contract LottoMojiFun is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Obtiene el balance actual de la pool de reserva
+     * @dev Obtiene los tickets de un sorteo
+     * @param drawId ID del sorteo
      */
-    function getReservePoolBalance() external view returns (uint256) {
-        return reservePool;
+    function getDrawTickets(uint256 drawId) external view returns (uint256[] memory) {
+        return drawTickets[drawId];
     }
     
     /**
-     * @dev Obtiene todos los tickets de un usuario
+     * @dev Obtiene los tickets de un usuario
      * @param user Dirección del usuario
-     * @return Array de IDs de tickets
      */
     function getUserTickets(address user) external view returns (uint256[] memory) {
         return userTickets[user];
     }
     
     /**
-     * @dev Obtiene los tickets de un usuario para un sorteo específico
+     * @dev Obtiene los tickets de un usuario en un sorteo específico
      * @param drawId ID del sorteo
      * @param user Dirección del usuario
-     * @return Array de IDs de tickets
      */
     function getUserDrawTickets(uint256 drawId, address user) external view returns (uint256[] memory) {
         return userDrawTickets[drawId][user];
     }
     
     /**
-     * @dev Obtiene los detalles de un ticket
-     * @param ticketId ID del ticket
-     * @return Estructura completa del ticket
-     */
-    function getTicketDetails(uint256 ticketId) external view returns (Ticket memory) {
-        return tickets[ticketId];
-    }
-    
-    /**
-     * @dev Obtiene los detalles de un sorteo
+     * @dev Obtiene el resultado de un sorteo
      * @param drawId ID del sorteo
-     * @return Estructura completa del sorteo
      */
-    function getDrawDetails(uint256 drawId) external view returns (DrawResult memory) {
-        return draws[drawId];
-    }
-    
-    /**
-     * @dev Obtiene la cantidad de ganadores de cada categoría para un sorteo
-     * @param drawId ID del sorteo
-     * @return firstWinners Cantidad de ganadores del primer premio
-     * @return secondWinners Cantidad de ganadores del segundo premio
-     * @return thirdWinners Cantidad de ganadores del tercer premio
-     * @return fourthWinners Cantidad de ganadores del premio de consolación
-     */
-    function getWinnersCount(uint256 drawId) external view returns (
-        uint256 firstWinners, 
-        uint256 secondWinners, 
-        uint256 thirdWinners,
-        uint256 fourthWinners
+    function getDrawResult(uint256 drawId) external view returns (
+        string[] memory winningEmojis,
+        uint256 prizePool,
+        uint256 timestamp,
+        bool completed,
+        uint256 firstPrizeCount,
+        uint256 secondPrizeCount,
+        uint256 thirdPrizeCount,
+        uint256 fourthPrizeCount
     ) {
         DrawResult storage draw = draws[drawId];
         return (
-            draw.firstPrizeWinners, 
-            draw.secondPrizeWinners, 
+            draw.winningEmojis,
+            draw.prizePool,
+            draw.timestamp,
+            draw.completed,
+            draw.firstPrizeWinners,
+            draw.secondPrizeWinners,
             draw.thirdPrizeWinners,
             draw.fourthPrizeWinners
+        );
+    }
+    
+    /**
+     * @dev Obtiene información sobre el próximo sorteo
+     */
+    function getNextDrawInfo() external view returns (
+        uint256 currentDraw,
+        uint256 nextDraw,
+        uint256 timeRemaining,
+        uint256 currentPool
+    ) {
+        return (
+            currentDrawId,
+            nextDrawTime,
+            nextDrawTime > block.timestamp ? nextDrawTime - block.timestamp : 0,
+            prizePoolForDraw[currentDrawId]
         );
     }
 } 

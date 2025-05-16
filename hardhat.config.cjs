@@ -1,8 +1,8 @@
-const { HardhatUserConfig } = require("hardhat/config");
-require("@nomicfoundation/hardhat-ethers");
-require("@nomicfoundation/hardhat-verify");
-require("@openzeppelin/hardhat-upgrades");
-const dotenv = require("dotenv");
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-ethers";
+import "@nomicfoundation/hardhat-verify";
+import "@openzeppelin/hardhat-upgrades";
+import * as dotenv from "dotenv";
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const baseApiKey = process.env.BASE_API_KEY || "";
 const mainnetRpcUrl = process.env.MAINNET_RPC_URL || "https://mainnet.base.org";
 const testnetRpcUrl = process.env.TESTNET_RPC_URL || "https://sepolia.base.org";
 
-const config = {
+const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.20",
     settings: {
@@ -69,4 +69,4 @@ const config = {
   },
 };
 
-module.exports = config; 
+export default config; 
