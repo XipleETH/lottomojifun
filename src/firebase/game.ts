@@ -77,7 +77,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       numbers,
       timestamp: serverTimestamp(),
       userId: user.id,
-      username: user.username || 'usuario',
+      username: user.username,
       walletAddress: user.walletAddress,
       fid: user.fid || 0,
       isFarcasterUser: true,
@@ -85,40 +85,13 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       chainId: user.chainId || 10, // Optimism por defecto
       // En el futuro, aquí se incluiría información de la transacción blockchain
       // txHash: "",
-      ticketHash: uniqueHash,
-      createdAt: new Date().toISOString() // Campo adicional para diagnóstico y backup
+      ticketHash: uniqueHash
     };
     
-    // Crear referencia a la colección de tickets (esto creará la colección si no existe)
-    const ticketsCollectionRef = collection(db, TICKETS_COLLECTION);
-    
-    // Intentar añadir el documento con reintento
-    let ticketRef;
-    let retries = 3;
-    
-    while (retries > 0) {
-      try {
-        ticketRef = await addDoc(ticketsCollectionRef, ticketData);
-        break; // Si tiene éxito, salir del bucle
-      } catch (addError) {
-        console.error(`Error al añadir ticket (intento ${4-retries}/3):`, addError);
-        retries--;
-        
-        if (retries === 0) {
-          throw new Error(`No se pudo crear el ticket después de 3 intentos: ${addError}`);
-        }
-        
-        // Esperar antes de reintentar
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    if (!ticketRef) {
-      throw new Error('No se pudo crear la referencia del ticket');
-    }
+    const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
     
     // Simular una transacción en la blockchain (en el futuro esto sería real)
-    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username || 'usuario'} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
+    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
     
     // Devolver el ticket creado
     return {
@@ -224,90 +197,51 @@ export const subscribeToUserTickets = (
   callback: (tickets: Ticket[]) => void
 ) => {
   try {
-    console.log('[subscribeToUserTickets] Configurando suscripción a tickets...');
-    
-    // Variable para almacenar la función de unsubscribe
-    let unsubscribeFunc = () => {};
-    
     // Primero obtenemos el usuario actual como promesa
-    const userPromise = getCurrentUser().then(user => {
-      if (!user) {
-        console.warn('[subscribeToUserTickets] No hay usuario autenticado, no se pueden obtener tickets');
-        callback([]);
-        return null;
-      }
-      
-      console.log(`[subscribeToUserTickets] Usuario encontrado (ID: ${user.id}), configurando consulta de tickets`);
-      
-      try {
-        // Crear la colección si no existe (esto no hace nada si ya existe)
-        const ticketsCollectionRef = collection(db, TICKETS_COLLECTION);
-        
-        const ticketsQuery = query(
-          ticketsCollectionRef,
-          where('userId', '==', user.id),
-          orderBy('timestamp', 'desc')
-        );
-        
-        // Configurar la suscripción con manejo de errores
-        const unsubscribe = onSnapshot(ticketsQuery, 
-          (snapshot) => {
-            try {
-              console.log(`[subscribeToUserTickets] Snapshot recibido: ${snapshot.docs.length} tickets`);
-              
-              const tickets = snapshot.docs.map(doc => {
-                try {
-                  return mapFirestoreTicket(doc);
-                } catch (error) {
-                  console.error('[subscribeToUserTickets] Error al mapear ticket:', error, doc.id);
-                  return null;
-                }
-              }).filter(ticket => ticket !== null) as Ticket[];
-              
-              callback(tickets);
-            } catch (error) {
-              console.error('[subscribeToUserTickets] Error al procesar snapshot:', error);
-              callback([]);
-            }
-          }, 
-          (error) => {
-            console.error('[subscribeToUserTickets] Error en la suscripción:', error);
-            
-            // Si el error es que la colección no existe, devolver una lista vacía
-            if (error.code === 'permission-denied' || error.code === 'not-found') {
-              console.log('[subscribeToUserTickets] Colección no encontrada o sin permisos, devolviendo lista vacía');
-              callback([]);
-            } else {
-              // Para otros errores, intentar recrear la suscripción después de un retraso
-              setTimeout(() => {
-                console.log('[subscribeToUserTickets] Reintentando suscripción después de error...');
-                // Aquí podríamos implementar un nuevo intento, pero por ahora solo mostrar un mensaje
-              }, 5000);
-            }
-          }
-        );
-        
-        // Guardar la función de unsubscribe
-        unsubscribeFunc = unsubscribe;
-        return unsubscribe;
-      } catch (queryError) {
-        console.error('[subscribeToUserTickets] Error al configurar consulta:', queryError);
-        callback([]);
-        return null;
-      }
-    }).catch(error => {
-      console.error('[subscribeToUserTickets] Error al obtener usuario actual:', error);
+    getCurrentUser().then(user => {
+    if (!user) {
       callback([]);
-      return null;
+      return () => {};
+    }
+    
+    const ticketsQuery = query(
+      collection(db, TICKETS_COLLECTION),
+      where('userId', '==', user.id),
+      orderBy('timestamp', 'desc')
+    );
+    
+    return onSnapshot(ticketsQuery, (snapshot) => {
+      try {
+        const tickets = snapshot.docs.map(doc => {
+          try {
+            return mapFirestoreTicket(doc);
+          } catch (error) {
+            console.error('Error mapping ticket document:', error, doc.id);
+            return null;
+          }
+        }).filter(ticket => ticket !== null) as Ticket[];
+        
+        callback(tickets);
+      } catch (error) {
+        console.error('Error processing tickets snapshot:', error);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('Error in subscribeToUserTickets:', error);
+      callback([]);
+    });
+    }).catch(error => {
+      console.error('Error getting current user:', error);
+      callback([]);
+      return () => {};
     });
     
-    // Devolver una función de unsubscribe que espera a que se resuelva la promesa
+    // Devolver una función de unsubscribe temporal
     return () => {
-      console.log('[subscribeToUserTickets] Limpiando suscripción');
-      unsubscribeFunc();
+      // Esta función será reemplazada cuando se resuelva la promesa
     };
   } catch (error) {
-    console.error('[subscribeToUserTickets] Error general al configurar suscripción:', error);
+    console.error('Error setting up user tickets subscription:', error);
     callback([]);
     return () => {}; // Unsubscribe no-op
   }

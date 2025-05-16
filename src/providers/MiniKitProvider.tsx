@@ -46,13 +46,13 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   useEffect(() => {
     const checkWarpcastEnvironment = async () => {
       try {
-        // Marcar como inicializado incluso si hay errores
+        // Marcar como inicializado más rápido para evitar pantallas de carga largas
         setTimeout(() => {
           if (!isInitialized) {
             console.log('Forzando inicialización tras timeout');
             setIsInitialized(true);
           }
-        }, 2000);
+        }, 1000);  // Reducido de 2000ms a 1000ms
 
         if (!sdk) {
           console.error('ERROR: SDK de Farcaster no está disponible');
@@ -63,13 +63,33 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         console.log('Inicializando SDK de Farcaster...');
         
         try {
-          // Verificar si el SDK está listo
-          await sdk.actions.ready();
-          setIsFarcasterReady(true);
-          console.log('SDK de Farcaster listo');
+          // Verificar si el SDK está listo con timeout para evitar bloqueos
+          const readyPromise = sdk.actions.ready();
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("SDK ready timeout")), 1500);
+          });
+          
+          try {
+            await Promise.race([readyPromise, timeoutPromise]);
+            setIsFarcasterReady(true);
+            console.log('SDK de Farcaster listo');
+          } catch (readyError) {
+            console.warn('Timeout en SDK ready, continuando de todos modos', readyError);
+            // Asumimos que está listo de todos modos para evitar bloquear la UI
+            setIsFarcasterReady(true);
+          }
           
           // Verificar si estamos en Warpcast
-          const isFrame = await sdk.isFrameAvailable();
+          let isFrame = false;
+          try {
+            isFrame = await Promise.race([
+              sdk.isFrameAvailable(),
+              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1000))
+            ]);
+          } catch (frameError) {
+            console.warn('Error detectando frame, asumiendo false', frameError);
+          }
+          
           setIsWarpcastApp(isFrame);
           
           console.log('Entorno de Farcaster detectado:', { 
@@ -81,7 +101,9 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
           // Si estamos en Warpcast, intentamos obtener el usuario automáticamente
           if (isFrame) {
             console.log('Detectado Warpcast, obteniendo usuario automáticamente...');
-            await checkAndSetFarcasterUser();
+            checkAndSetFarcasterUser().catch(err => 
+              console.error('Error obteniendo usuario inicial:', err)
+            );
             
             // Intentar detectar qué red está utilizando el usuario
             try {
