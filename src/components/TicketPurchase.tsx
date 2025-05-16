@@ -11,7 +11,7 @@ const AVAILABLE_EMOJIS = [
   '🎁', '🎮', '🚀', '🌍', '🍀'
 ];
 
-const MAX_EMOJIS = 5;
+const MAX_EMOJIS = 4;
 
 interface TicketPurchaseProps {
   onPurchaseComplete?: () => void;
@@ -62,7 +62,7 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
         return prev.filter(e => e !== emoji);
       }
       
-      // Si ya hay 5 emojis seleccionados, no hacer nada
+      // Si ya hay MAX_EMOJIS emojis seleccionados, no hacer nada
       if (prev.length >= MAX_EMOJIS) {
         return prev;
       }
@@ -74,7 +74,7 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
   
   // Manejar compra de ticket
   const handlePurchase = async () => {
-    if (selectedEmojis.length === 0) {
+    if (selectedEmojis.length !== MAX_EMOJIS) {
       return;
     }
     
@@ -157,7 +157,7 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
     return (
       <div>
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2 text-white">Selecciona tus emojis (máx. {MAX_EMOJIS})</h3>
+          <h3 className="text-lg font-semibold mb-2 text-white">Selecciona exactamente {MAX_EMOJIS} emojis</h3>
           <div className="grid grid-cols-5 gap-2">
             {AVAILABLE_EMOJIS.map((emoji, index) => (
               <button
@@ -197,7 +197,7 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
                   ))}
                 </div>
               ) : (
-                <p className="text-white/50">Selecciona al menos un emoji</p>
+                <p className="text-white/50">Selecciona {MAX_EMOJIS} emojis para tu ticket</p>
               )}
             </div>
           </div>
@@ -205,7 +205,7 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
         
         <button
           onClick={handlePurchase}
-          disabled={selectedEmojis.length === 0 || isPurchasing}
+          disabled={selectedEmojis.length !== MAX_EMOJIS || isPurchasing}
           className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
         >
           {isPurchasing ? (
@@ -219,6 +219,12 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
             </>
           )}
         </button>
+        
+        {selectedEmojis.length > 0 && selectedEmojis.length < MAX_EMOJIS && (
+          <p className="text-amber-300 text-sm mt-2 text-center">
+            Selecciona {MAX_EMOJIS - selectedEmojis.length} emoji{MAX_EMOJIS - selectedEmojis.length !== 1 ? 's' : ''} más
+          </p>
+        )}
       </div>
     );
   };
