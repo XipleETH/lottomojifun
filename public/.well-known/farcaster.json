@@ -35,5 +35,25 @@
     "ogTitle": "LottoMoji - Emoji Lottery Game for Farcaster",
     "ogDescription": "Play the exciting emoji-based lottery game exclusively for Farcaster users. Match 4 emojis to win amazing prizes!",
     "ogImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
+  },
+
+  "miniApp": {
+    "autoSignIn": true,
+    "requiresWallet": true,
+    "walletPermissions": ["read", "sign"],
+    "appType": "game",
+    "supportUrl": "https://lottomojifun.vercel.app/help",
+    "notificationTypes": [
+      {
+        "id": "win_notification",
+        "title": "Win Notification",
+        "description": "Get notified when you win a prize"
+      },
+      {
+        "id": "draw_notification",
+        "title": "Draw Notification",
+        "description": "Get notified when a new draw is about to happen"
+      }
+    ]
   }
 } 

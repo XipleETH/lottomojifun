@@ -1,7 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { User } from '../types';
 import { onAuthStateChanged, signInWithFarcaster, signInAnonymousUser } from '../firebase/auth';
-import { sdk } from '@farcaster/frame-sdk';
+import { useFarcasterWallet } from '../hooks/useFarcasterWallet';
+import { useMiniKitAuth } from '../providers/MiniKitProvider';
 
 interface AuthContextType {
   user: User | null;
@@ -23,41 +24,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFarcasterAvailable, setIsFarcasterAvailable] = useState(true); // Por defecto asumimos que está disponible
+  
+  // Usar nuestro hook personalizado de Farcaster
+  const { 
+    isConnected: isFarcasterConnected,
+    address: farcasterAddress,
+    fid: farcasterFid,
+    username: farcasterUsername,
+    connect: connectFarcasterWallet
+  } = useFarcasterWallet();
+  
+  // Obtener información del contexto MiniKit
+  const { farcasterUser, isWarpcastApp } = useMiniKitAuth();
 
-  // Verificar disponibilidad de Farcaster al cargar
+  // Actualizar el estado cuando cambia el usuario de Farcaster
   useEffect(() => {
-    const checkFarcasterAvailability = async () => {
-      try {
-        // Siempre asumir que estamos en Farcaster incluso si no podemos confirmarlo
-        setIsFarcasterAvailable(true);
-        
-        // Intentar con el SDK pero no fallar si no está disponible
-        if (sdk) {
-          try {
-            const isAvailable = await sdk.isFrameAvailable();
-            console.log('Farcaster disponible (según SDK):', isAvailable);
-          } catch (e) {
-            console.log('Error al verificar disponibilidad con SDK, pero continuamos:', e);
-          }
-        }
-      } catch (error) {
-        console.error('Error verificando disponibilidad de Farcaster:', error);
-        // Aún así, asumimos que estamos en Farcaster
-        setIsFarcasterAvailable(true);
-      }
-    };
-    
-    checkFarcasterAvailability();
-  }, []);
+    if (farcasterUser) {
+      setUser(farcasterUser);
+      setIsLoading(false);
+    }
+  }, [farcasterUser]);
+
+  // Actualizar disponibilidad de Farcaster
+  useEffect(() => {
+    setIsFarcasterAvailable(isWarpcastApp);
+  }, [isWarpcastApp]);
+
+  useEffect(() => {
+    // Si tenemos información de la billetera de Farcaster pero no un usuario completo,
+    // crear uno basado en esos datos
+    if (isFarcasterConnected && farcasterAddress && farcasterFid && !user) {
+      const newUser: User = {
+        id: `farcaster-${farcasterFid}`,
+        username: farcasterUsername || `farcaster-${farcasterFid}`,
+        walletAddress: farcasterAddress,
+        fid: farcasterFid,
+        isFarcasterUser: true,
+        verifiedWallet: true,
+        chainId: 10 // Optimism
+      };
+      
+      setUser(newUser);
+      setIsLoading(false);
+    }
+  }, [isFarcasterConnected, farcasterAddress, farcasterFid, farcasterUsername, user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged((authUser) => {
-      setUser(authUser);
+      // Solo actualizar si no tenemos un usuario de Farcaster
+      if (!farcasterUser && !isFarcasterConnected) {
+        setUser(authUser);
+      }
       setIsLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [farcasterUser, isFarcasterConnected]);
 
   const signIn = async () => {
     if (user) return;
@@ -66,10 +88,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(true);
       
       // Intentar primero con Farcaster
-      const farcasterUser = await signInWithFarcaster();
+      // Prioridad: 1. MiniKit Farcaster, 2. Billetera Farcaster, 3. Anónimo
       if (farcasterUser) {
         setUser(farcasterUser);
         return;
+      }
+      
+      if (!isFarcasterConnected) {
+        try {
+          await connectFarcasterWallet();
+          // El efecto se encargará de actualizar el usuario
+          return;
+        } catch (error) {
+          console.error('Error intentando conectar billetera Farcaster:', error);
+        }
       }
       
       // Si no podemos autenticar con Farcaster, crear un usuario anónimo con atributos de Farcaster

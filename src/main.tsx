@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from './components/AuthProvider';
-import { MiniKitProvider } from '@coinbase/onchainkit/minikit';
+import { MiniKitProvider } from './providers/MiniKitProvider';
 import { initializeGameState } from './firebase/gameServer';
 
 // Inicializar Firebase al cargar la aplicación

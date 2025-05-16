@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { WalletIcon, Coins, CircleDollarSign, RefreshCw } from 'lucide-react';
+import { WalletIcon, Coins, CircleDollarSign, RefreshCw, UserIcon } from 'lucide-react';
 import { useWallet } from '../hooks/useWallet';
 import { useAuth } from './AuthProvider';
+import { useFarcasterWallet } from '../hooks/useFarcasterWallet';
+import { useMiniKitAuth } from '../providers/MiniKitProvider';
 
 export const WalletInfo: React.FC = () => {
   const { user } = useAuth();
   const { 
-    isConnected, 
-    isConnecting, 
+    isConnected: isWalletConnected, 
+    isConnecting: isWalletConnecting, 
     tokenBalance, 
     nfts, 
     lastTransaction,
@@ -16,10 +18,52 @@ export const WalletInfo: React.FC = () => {
     refreshWalletData
   } = useWallet();
   
+  // Nuevo hook de billetera de Farcaster
+  const {
+    isConnected: isFarcasterConnected,
+    isConnecting: isFarcasterConnecting,
+    address: farcasterAddress,
+    fid: farcasterFid,
+    username: farcasterUsername,
+    connect: connectFarcaster,
+    error: farcasterError
+  } = useFarcasterWallet();
+  
+  // Información del context de MiniKit
+  const { farcasterUser, isWarpcastApp } = useMiniKitAuth();
+  
   const [isExpanded, setIsExpanded] = useState(false);
   
-  if (!user || !user.walletAddress) {
-    return null;
+  // Determinar la información de billetera a mostrar (priorizando Farcaster)
+  const walletAddress = farcasterAddress || user?.walletAddress || null;
+  const fid = farcasterFid || user?.fid || null;
+  const username = farcasterUsername || user?.username || null;
+  const isConnected = isFarcasterConnected || isWalletConnected;
+  const isConnecting = isFarcasterConnecting || isWalletConnecting;
+  
+  if (!walletAddress) {
+    return (
+      <div className="bg-white/10 rounded-lg p-4 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <WalletIcon className="mr-2" size={18} />
+            <span className="font-medium">Billetera Farcaster</span>
+          </div>
+          <button
+            onClick={() => connectFarcaster()}
+            disabled={isConnecting}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {isConnecting ? 'Conectando...' : 'Conectar'}
+          </button>
+        </div>
+        {farcasterError && (
+          <div className="mt-2 text-red-300 text-sm">
+            {farcasterError}
+          </div>
+        )}
+      </div>
+    );
   }
   
   // Formatear la dirección de la billetera para mostrarla abreviada
@@ -47,16 +91,32 @@ export const WalletInfo: React.FC = () => {
           <div className="bg-white/5 p-3 rounded">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-white/70">Dirección</span>
-              <span className="font-mono text-sm">{formatAddress(user.walletAddress)}</span>
+              <span className="font-mono text-sm">{formatAddress(walletAddress)}</span>
             </div>
             
-            {user.fid && (
+            {fid && (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-white/70">Farcaster ID</span>
-                <span>{user.fid}</span>
+                <span>{fid}</span>
+              </div>
+            )}
+            
+            {username && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/70">Usuario</span>
+                <div className="flex items-center">
+                  <UserIcon size={12} className="mr-1" />
+                  <span>{username}</span>
+                </div>
               </div>
             )}
           </div>
+          
+          {isWarpcastApp && (
+            <div className="bg-white/5 p-2 rounded text-center text-xs text-white/60">
+              Conectado a través de Warpcast
+            </div>
+          )}
           
           <div className="flex items-center justify-between bg-white/5 p-3 rounded">
             <div className="flex items-center">
@@ -82,7 +142,7 @@ export const WalletInfo: React.FC = () => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                connectWallet();
+                connectFarcaster();
               }}
               disabled={isConnecting}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-medium transition-colors"
