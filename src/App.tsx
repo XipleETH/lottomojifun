@@ -4,13 +4,15 @@ import { Ticket as TicketComponent } from './components/Ticket';
 import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
-import { Trophy, UserCircle, Zap, Terminal, WalletIcon } from 'lucide-react';
+import { Trophy, UserCircle, Zap, Terminal, WalletIcon, Coins } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
+import { PrizePool } from './components/PrizePool';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -113,6 +115,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500">
+      <Toaster position="top-center" />
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl md:text-6xl font-bold text-white">
@@ -149,12 +152,21 @@ function App() {
           </div>
         )}
         
-        <p className="text-white/90 text-xl mb-4">
-          Match 4 emojis to win! 🏆
-        </p>
-        <p className="text-white/80">Next draw in:</p>
-        <div className="flex justify-center mt-4">
-          <Timer seconds={gameState.timeRemaining} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="md:col-span-2">
+            <p className="text-white/90 text-xl mb-4">
+              Elige 4 emojis y gana USDC! 🏆
+            </p>
+            <p className="text-white/80 mb-2">Próximo sorteo en:</p>
+            <div className="flex justify-center mb-6">
+              <Timer seconds={gameState.timeRemaining} />
+            </div>
+          </div>
+          
+          {/* Panel de premios */}
+          <div>
+            <PrizePool />
+          </div>
         </div>
 
         <WinnerAnnouncement 
@@ -197,6 +209,40 @@ function App() {
               }
             />
           ))}
+        </div>
+        
+        {/* Información sobre cómo funciona */}
+        <div className="mt-8 bg-white/10 p-6 rounded-lg">
+          <h2 className="text-white text-xl font-bold mb-4 flex items-center">
+            <Coins className="mr-2" size={20} />
+            ¿Cómo funciona?
+          </h2>
+          <div className="text-white/80 space-y-3">
+            <p>
+              LottoMoji es una lotería de emojis que funciona en la red Base usando tu billetera de Farcaster.
+            </p>
+            <p>
+              1. Cada ticket cuesta 1 USDC y se compra directamente desde tu billetera.
+            </p>
+            <p>
+              2. Selecciona 4 emojis para crear tu ticket y comprarlo.
+            </p>
+            <p>
+              3. El 95% de los fondos van al pozo de premios, mientras que el 5% se destina al desarrollo.
+            </p>
+            <p>
+              4. Premios: 
+              <ul className="list-disc list-inside ml-4 mt-1">
+                <li>4 emojis iguales: 70% del pozo</li>
+                <li>3 emojis iguales: 20% del pozo</li>
+                <li>2 emojis iguales: 10% del pozo</li>
+                <li>1 emoji igual: Ticket gratis</li>
+              </ul>
+            </p>
+            <p>
+              5. La lotería se sortea diariamente y los premios se envían automáticamente a las billeteras ganadoras.
+            </p>
+          </div>
         </div>
       </div>
       <GameHistoryButton />

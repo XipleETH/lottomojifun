@@ -21,7 +21,7 @@ import { Ticket, GameResult } from '../types';
 const GAME_STATE_DOC = 'current_game_state';
 const TICKETS_COLLECTION = 'tickets';
 const GAME_RESULTS_COLLECTION = 'game_results';
-const DRAW_INTERVAL_MS = 60000; // 1 minuto
+const DRAW_INTERVAL_MS = 600000; // 10 minutos
 
 // Función para solicitar un sorteo manual (solo para uso administrativo)
 export const requestManualGameDraw = async (): Promise<boolean> => {
@@ -55,13 +55,16 @@ export const subscribeToGameState = (callback: (nextDrawTime: number, winningNum
     // Obtener el tiempo del próximo sorteo (esto siempre lo procesamos)
     let nextDrawTime = data.nextDrawTime?.toMillis() || 0;
     
-    // Si no hay un tiempo válido o ya pasó, calcular el próximo minuto
+    // Si no hay un tiempo válido o ya pasó, calcular el próximo bloque de 10 minutos
     if (nextDrawTime <= now) {
-      const nextMinute = new Date();
-      nextMinute.setMinutes(nextMinute.getMinutes() + 1);
-      nextMinute.setSeconds(0);
-      nextMinute.setMilliseconds(0);
-      nextDrawTime = nextMinute.getTime();
+      const nextDrawDate = new Date();
+      const currentMinutes = nextDrawDate.getMinutes();
+      const minutesToAdd = 10 - (currentMinutes % 10);
+      
+      nextDrawDate.setMinutes(nextDrawDate.getMinutes() + minutesToAdd);
+      nextDrawDate.setSeconds(0);
+      nextDrawDate.setMilliseconds(0);
+      nextDrawTime = nextDrawDate.getTime();
     }
     
     // Obtener los números ganadores actuales, SOLO si la actualización viene del servidor

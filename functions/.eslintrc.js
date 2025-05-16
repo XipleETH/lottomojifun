@@ -6,26 +6,30 @@ module.exports = {
   },
   extends: [
     "eslint:recommended",
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "plugin:import/typescript",
+    "google",
     "plugin:@typescript-eslint/recommended",
   ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
-    project: ["tsconfig.json"],
+    project: ["tsconfig.json", "tsconfig.dev.json"],
     sourceType: "module",
-    ecmaVersion: 2018,
   },
+  ignorePatterns: [
+    "/lib/**/*", // Ignore built files.
+  ],
   plugins: [
     "@typescript-eslint",
     "import",
   ],
   rules: {
-    "quotes": ["error", "single", {"allowTemplateLiterals": true}],
+    "quotes": ["error", "double"],
     "import/no-unresolved": 0,
-    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "off"
   },
-  ignorePatterns: [
-    "/lib/**/*", // Ignore built files
-  ],
   overrides: [
     {
       files: ["**/*.spec.*"],

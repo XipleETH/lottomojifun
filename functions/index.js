@@ -38,7 +38,7 @@ const db = getFirestore();
 const GAME_STATE_DOC = 'current_game_state';
 const TICKETS_COLLECTION = 'tickets';
 const GAME_RESULTS_COLLECTION = 'game_results';
-const DRAW_INTERVAL_MS = 60000; // 1 minuto
+const DRAW_INTERVAL_MS = 600000; // 10 minutos (60000 * 10)
 
 // Función para generar emojis aleatorios
 const generateRandomEmojis = (count) => {
@@ -348,9 +348,9 @@ const processGameDraw = async () => {
   }
 };
 
-// Función programada que se ejecuta cada minuto para realizar el sorteo automáticamente
+// Función programada que se ejecuta cada 10 minutos para realizar el sorteo automáticamente
 exports.scheduledGameDraw = onSchedule({
-  schedule: "every 1 minutes",
+  schedule: "every 10 minutes",
   timeZone: "America/Mexico_City", // Ajusta a tu zona horaria
   retryConfig: {
     maxRetryAttempts: 0, // Desactivar reintentos automáticos para evitar duplicados
