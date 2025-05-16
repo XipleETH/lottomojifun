@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { WalletIcon, Coins, CircleDollarSign, RefreshCw, UserIcon } from 'lucide-react';
+import { WalletIcon, Coins, CircleDollarSign, RefreshCw, UserIcon, ArrowUpDown } from 'lucide-react';
 import { useWallet } from '../hooks/useWallet';
 import { useAuth } from './AuthProvider';
 import { useFarcasterWallet } from '../hooks/useFarcasterWallet';
 import { useMiniKitAuth } from '../providers/MiniKitProvider';
+
+// Constantes de red
+const BASE_CHAIN_ID = 8453;
+const OPTIMISM_CHAIN_ID = 10;
 
 export const WalletInfo: React.FC = () => {
   const { user } = useAuth();
@@ -26,13 +30,17 @@ export const WalletInfo: React.FC = () => {
     fid: farcasterFid,
     username: farcasterUsername,
     connect: connectFarcaster,
-    error: farcasterError
+    error: farcasterError,
+    currentChainId,
+    switchToBase,
+    isBaseNetwork
   } = useFarcasterWallet();
   
   // Información del context de MiniKit
   const { farcasterUser, isWarpcastApp } = useMiniKitAuth();
   
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isChangingNetwork, setIsChangingNetwork] = useState(false);
   
   // Determinar la información de billetera a mostrar (priorizando Farcaster)
   const walletAddress = farcasterAddress || user?.walletAddress || null;
@@ -40,6 +48,35 @@ export const WalletInfo: React.FC = () => {
   const username = farcasterUsername || user?.username || null;
   const isConnected = isFarcasterConnected || isWalletConnected;
   const isConnecting = isFarcasterConnecting || isWalletConnecting;
+  
+  // Función para cambiar a la red Base
+  const handleSwitchToBase = async () => {
+    try {
+      setIsChangingNetwork(true);
+      const success = await switchToBase();
+      if (success) {
+        console.log("Cambiado a Base exitosamente");
+      } else {
+        console.error("No se pudo cambiar a Base");
+      }
+    } catch (error) {
+      console.error("Error cambiando a Base:", error);
+    } finally {
+      setIsChangingNetwork(false);
+    }
+  };
+  
+  // Obtener nombre de red
+  const getNetworkName = (chainId: number | null): string => {
+    if (chainId === null) return "Red desconocida";
+    
+    switch (chainId) {
+      case 1: return "Ethereum Mainnet";
+      case BASE_CHAIN_ID: return "Base";
+      case OPTIMISM_CHAIN_ID: return "Optimism";
+      default: return `Red ${chainId}`;
+    }
+  };
   
   if (!walletAddress) {
     return (
@@ -110,6 +147,33 @@ export const WalletInfo: React.FC = () => {
                 </div>
               </div>
             )}
+            
+            {/* Información de red */}
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-sm text-white/70">Red</span>
+              <div className="flex items-center gap-2">
+                <span className={isBaseNetwork ? "text-green-400" : "text-yellow-400"}>
+                  {getNetworkName(currentChainId)}
+                </span>
+                {!isBaseNetwork && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSwitchToBase();
+                    }}
+                    disabled={isChangingNetwork}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center transition-colors disabled:opacity-50"
+                  >
+                    {isChangingNetwork ? 'Cambiando...' : (
+                      <>
+                        <ArrowUpDown size={10} className="mr-1" />
+                        Cambiar a Base
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
           
           {isWarpcastApp && (
@@ -172,7 +236,7 @@ export const WalletInfo: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-white/70">Última Tx</span>
                     <a 
-                      href={`https://optimistic.etherscan.io/tx/${lastTransaction}`}
+                      href={`https://${isBaseNetwork ? 'basescan.org' : 'optimistic.etherscan.io'}/tx/${lastTransaction}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-mono text-indigo-300 hover:text-indigo-200 truncate max-w-[200px]"

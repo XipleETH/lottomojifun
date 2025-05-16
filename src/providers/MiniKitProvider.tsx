@@ -3,6 +3,10 @@ import { MiniKitProvider as OnchainMiniKitProvider } from '@coinbase/onchainkit/
 import { sdk } from '@farcaster/frame-sdk';
 import { User } from '../types';
 
+// Constantes para redes blockchain
+const OPTIMISM_CHAIN_ID = 10;
+const BASE_CHAIN_ID = 8453;
+
 interface MiniKitContextType {
   farcasterUser: User | null;
   isFarcasterReady: boolean;
@@ -10,6 +14,8 @@ interface MiniKitContextType {
   connectFarcaster: () => Promise<void>;
   disconnectFarcaster: () => void;
   checkFarcasterConnection: () => Promise<boolean>;
+  getCurrentChainId: () => number | null;
+  switchToBase: () => Promise<boolean>;
 }
 
 const MiniKitContext = createContext<MiniKitContextType>({
@@ -18,7 +24,9 @@ const MiniKitContext = createContext<MiniKitContextType>({
   isWarpcastApp: false,
   connectFarcaster: async () => {},
   disconnectFarcaster: () => {},
-  checkFarcasterConnection: async () => false
+  checkFarcasterConnection: async () => false,
+  getCurrentChainId: () => null,
+  switchToBase: async () => false
 });
 
 export const useMiniKitAuth = () => useContext(MiniKitContext);
@@ -32,6 +40,7 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   const [isFarcasterReady, setIsFarcasterReady] = useState(false);
   const [isWarpcastApp, setIsWarpcastApp] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [currentChainId, setCurrentChainId] = useState<number | null>(null);
 
   // Verificar si estamos en la app de Warpcast
   useEffect(() => {
@@ -73,6 +82,18 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
           if (isFrame) {
             console.log('Detectado Warpcast, obteniendo usuario automáticamente...');
             await checkAndSetFarcasterUser();
+            
+            // Intentar detectar qué red está utilizando el usuario
+            try {
+              if (window.ethereum) {
+                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                const chainId = parseInt(chainIdHex, 16);
+                setCurrentChainId(chainId);
+                console.log(`Red actual detectada: ${chainId} (${getNetworkName(chainId)})`);
+              }
+            } catch (chainError) {
+              console.error('Error detectando red actual:', chainError);
+            }
           } else {
             console.log('No estamos en Warpcast. El usuario deberá conectarse manualmente.');
           }
@@ -90,6 +111,80 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
     
     checkWarpcastEnvironment();
   }, []);
+
+  // Obtener nombre de red basado en el chainId
+  const getNetworkName = (chainId: number): string => {
+    switch (chainId) {
+      case 1: return 'Ethereum Mainnet';
+      case OPTIMISM_CHAIN_ID: return 'Optimism';
+      case BASE_CHAIN_ID: return 'Base';
+      case 84531: return 'Base Goerli (Testnet)';
+      case 11155111: return 'Sepolia (Testnet)';
+      default: return `Red desconocida (${chainId})`;
+    }
+  };
+
+  // Obtener la red actual
+  const getCurrentChainId = (): number | null => {
+    return currentChainId;
+  };
+
+  // Cambiar a la red Base
+  const switchToBase = async (): Promise<boolean> => {
+    try {
+      if (!window.ethereum) {
+        console.error('Ethereum provider no disponible');
+        return false;
+      }
+
+      try {
+        // Intentar cambiar a la red Base
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: `0x${BASE_CHAIN_ID.toString(16)}` }],
+        });
+        
+        setCurrentChainId(BASE_CHAIN_ID);
+        console.log('Cambiado exitosamente a la red Base');
+        return true;
+      } catch (switchError: any) {
+        // Si la red no está agregada, intentar añadirla
+        if (switchError.code === 4902) {
+          try {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: `0x${BASE_CHAIN_ID.toString(16)}`,
+                  chainName: 'Base',
+                  nativeCurrency: {
+                    name: 'ETH',
+                    symbol: 'ETH',
+                    decimals: 18,
+                  },
+                  rpcUrls: ['https://mainnet.base.org'],
+                  blockExplorerUrls: ['https://basescan.org'],
+                },
+              ],
+            });
+            
+            setCurrentChainId(BASE_CHAIN_ID);
+            console.log('Red Base añadida y seleccionada');
+            return true;
+          } catch (addError) {
+            console.error('Error añadiendo la red Base:', addError);
+            return false;
+          }
+        } else {
+          console.error('Error cambiando a red Base:', switchError);
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('Error en switchToBase:', error);
+      return false;
+    }
+  };
 
   // Función para obtener y mapear el usuario de Farcaster
   const checkAndSetFarcasterUser = async () => {
@@ -124,7 +219,7 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         fid: user.fid,
         isFarcasterUser: true,
         verifiedWallet: !!user.custody_address,
-        chainId: 10 // Optimism (cadena principal de Farcaster)
+        chainId: OPTIMISM_CHAIN_ID // Por defecto Optimism, pero el usuario puede estar en cualquier red
       };
       
       console.log('Usuario de Farcaster mapeado exitosamente:', mappedUser);
@@ -156,6 +251,18 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         
         if (success) {
           console.log('Conexión con Farcaster exitosa');
+          
+          // Intentar detectar en qué red está el usuario ahora
+          if (window.ethereum) {
+            try {
+              const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+              const chainId = parseInt(chainIdHex, 16);
+              setCurrentChainId(chainId);
+              console.log(`Red detectada post-conexión: ${chainId} (${getNetworkName(chainId)})`);
+            } catch (chainError) {
+              console.error('Error detectando red:', chainError);
+            }
+          }
         } else {
           console.error('ERROR: No se pudo obtener usuario después de signIn');
         }
@@ -194,7 +301,9 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         isWarpcastApp,
         connectFarcaster,
         disconnectFarcaster,
-        checkFarcasterConnection
+        checkFarcasterConnection,
+        getCurrentChainId,
+        switchToBase
       }}
     >
       {children}
