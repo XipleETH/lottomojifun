@@ -77,6 +77,12 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       return null;
     }
     
+    // Verificar que los números sean exactamente 4 emojis
+    if (!numbers || numbers.length !== 4) {
+      console.error('Error generating ticket: Invalid numbers (must be exactly 4 emojis)');
+      return null;
+    }
+    
     // Obtener el nombre de la colección de tickets activa
     const ticketsCollection = await getTicketsCollectionName();
     console.log(`Usando colección de tickets: ${ticketsCollection}`);
@@ -95,15 +101,15 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       isFarcasterUser: true,
       verifiedWallet: user.verifiedWallet || false,
       chainId: user.chainId || 10, // Optimism por defecto
-      // En el futuro, aquí se incluiría información de la transacción blockchain
-      // txHash: "",
-      ticketHash: uniqueHash
+      ticketHash: uniqueHash,
+      createdAt: new Date().toISOString()
     };
     
+    // Guardar el ticket en Firestore
     const ticketRef = await addDoc(collection(db, ticketsCollection), ticketData);
     
-    // Simular una transacción en la blockchain (en el futuro esto sería real)
     console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
+    console.log(`Emojis seleccionados: ${numbers.join(' ')}`);
     
     // Devolver el ticket creado
     return {

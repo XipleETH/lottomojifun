@@ -12,6 +12,7 @@ import { useAuth } from './components/AuthProvider';
 import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -199,6 +200,7 @@ function App() {
       </div>
       <GameHistoryButton />
       <EmojiChat />
+      <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
     </div>
   );
 }

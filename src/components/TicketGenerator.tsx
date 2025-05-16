@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { EmojiGrid } from './EmojiGrid';
 import { generateRandomEmojis } from '../utils/gameLogic';
+import { createPlayerTicket, createRandomTicket } from '../utils/ticketHelper';
+import { toast } from 'react-hot-toast';
 
 interface TicketGeneratorProps {
   onGenerateTicket: (numbers: string[]) => void;
@@ -16,6 +18,7 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   maxTickets
 }) => {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset selected emojis when ticket count changes to 0
   useEffect(() => {
@@ -25,43 +28,102 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   }, [ticketCount]);
 
   const handleEmojiSelect = (emoji: string) => {
-    if (disabled) return;
+    if (disabled || isSubmitting) return;
     
     const newSelection = [...selectedEmojis, emoji];
     setSelectedEmojis(newSelection);
     
     if (newSelection.length === 4) {
-      onGenerateTicket(newSelection);
-      setSelectedEmojis([]); // Reset selection after generating ticket
+      handleTicketCreation(newSelection);
     }
   };
 
   const handleEmojiDeselect = (index: number) => {
+    if (isSubmitting) return;
     setSelectedEmojis(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleRandomGenerate = () => {
-    if (disabled) {
+  const handleTicketCreation = async (emojis: string[]) => {
+    if (disabled || isSubmitting) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Primero, usar la función original para mantener la compatibilidad con el sistema
+      onGenerateTicket(emojis);
+      
+      // Usamos también nuestro nuevo helper para guardar en player_tickets
+      // Nota: en una implementación real, deberías obtener estos datos de autenticación
+      const userId = `user_${Date.now()}`;
+      const username = 'Usuario de Juego';
+      
+      console.log('[TicketGenerator] Creando ticket con emojis:', emojis.join(' '));
+      
+      const result = await createPlayerTicket(userId, username, emojis);
+      
+      if (result.success) {
+        toast.success('¡Ticket creado con éxito!');
+        console.log(`[TicketGenerator] Ticket guardado en player_tickets: ${result.ticketId}`);
+        
+        // Limpiar selección después de generar el ticket
+        setTimeout(() => {
+          setSelectedEmojis([]);
+          setIsSubmitting(false);
+        }, 1000);
+      } else {
+        toast.error(`Error: ${result.error}`);
+        setIsSubmitting(false);
+      }
+    } catch (error) {
+      console.error('[TicketGenerator] Error creando ticket:', error);
+      toast.error('Error al crear el ticket');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRandomGenerate = async () => {
+    if (disabled || isSubmitting) {
       console.log('[TicketGenerator] Generación de ticket aleatorio deshabilitada');
       return;
     }
     
-    console.log('[TicketGenerator] Generando ticket aleatorio...');
-    
-    // Generar 4 emojis aleatorios únicos
-    const randomEmojis = generateRandomEmojis(4);
-    
-    // Enviar al hook para que los guarde en Firebase
-    console.log('[TicketGenerator] Enviando emojis para guardar en Firebase:', randomEmojis);
-    onGenerateTicket(randomEmojis);
-    
-    // Feedback visual al usuario (opcional)
-    setSelectedEmojis([...randomEmojis]); // Mostrar brevemente los emojis seleccionados
-    
-    // Limpiar después de un momento para preparar para la próxima selección
-    setTimeout(() => {
-      setSelectedEmojis([]);
-    }, 1000);
+    try {
+      setIsSubmitting(true);
+      console.log('[TicketGenerator] Generando ticket aleatorio...');
+      
+      // Generar 4 emojis aleatorios únicos
+      const randomEmojis = generateRandomEmojis(4);
+      
+      // Enviar al hook para que los guarde en Firebase
+      console.log('[TicketGenerator] Enviando emojis para guardar en Firebase:', randomEmojis);
+      onGenerateTicket(randomEmojis);
+      
+      // Usamos también nuestro nuevo helper
+      const userId = `user_${Date.now()}`;
+      const username = 'Usuario de Juego';
+      
+      const result = await createRandomTicket(userId, username);
+      
+      if (result.success) {
+        toast.success('¡Ticket aleatorio creado con éxito!');
+        console.log(`[TicketGenerator] Ticket aleatorio guardado en player_tickets: ${result.ticketId}`);
+      } else {
+        toast.error(`Error: ${result.error}`);
+      }
+      
+      // Feedback visual al usuario
+      setSelectedEmojis([...randomEmojis]);
+      
+      // Limpiar después de un momento
+      setTimeout(() => {
+        setSelectedEmojis([]);
+        setIsSubmitting(false);
+      }, 1000);
+    } catch (error) {
+      console.error('[TicketGenerator] Error generando ticket aleatorio:', error);
+      toast.error('Error al crear el ticket aleatorio');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -76,12 +138,13 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
         
         <button
           onClick={handleRandomGenerate}
-          disabled={disabled}
+          disabled={disabled || isSubmitting}
           className={`w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 
                    rounded-xl shadow-lg transform transition hover:scale-105 
-                   disabled:opacity-50 disabled:cursor-not-allowed`}
+                   disabled:opacity-50 disabled:cursor-not-allowed
+                   ${isSubmitting ? 'opacity-75 cursor-wait' : ''}`}
         >
-          Generate Random Ticket ({ticketCount}/{maxTickets} Today)
+          {isSubmitting ? 'Generando...' : `Generate Random Ticket (${ticketCount}/${maxTickets} Today)`}
         </button>
       </div>
     </div>
