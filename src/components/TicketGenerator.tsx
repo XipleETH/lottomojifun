@@ -3,6 +3,7 @@ import { EmojiGrid } from './EmojiGrid';
 import { generateRandomEmojis } from '../utils/gameLogic';
 import { createPlayerTicket, createRandomTicket } from '../utils/ticketHelper';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../components/AuthProvider';
 
 interface TicketGeneratorProps {
   onGenerateTicket: (numbers: string[]) => void;
@@ -19,6 +20,7 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
 }) => {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user } = useAuth(); // Obtener la información del usuario autenticado
 
   // Reset selected emojis when ticket count changes to 0
   useEffect(() => {
@@ -46,20 +48,28 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   const handleTicketCreation = async (emojis: string[]) => {
     if (disabled || isSubmitting) return;
     
+    // Verificar si el usuario está autenticado
+    if (!user || !user.id) {
+      toast.error('Debes iniciar sesión para crear tickets');
+      return;
+    }
+    
     try {
       setIsSubmitting(true);
       
       // Primero, usar la función original para mantener la compatibilidad con el sistema
       onGenerateTicket(emojis);
       
-      // Usamos también nuestro nuevo helper para guardar en player_tickets
-      // Nota: en una implementación real, deberías obtener estos datos de autenticación
-      const userId = `user_${Date.now()}`;
-      const username = 'Usuario de Juego';
+      // Usar los datos del usuario autenticado
+      const userId = user.id;
+      const username = user.username || 'Usuario';
+      const walletAddress = user.walletAddress;
+      const fid = user.fid;
       
       console.log('[TicketGenerator] Creando ticket con emojis:', emojis.join(' '));
+      console.log('[TicketGenerator] Datos del usuario:', { userId, username, walletAddress, fid });
       
-      const result = await createPlayerTicket(userId, username, emojis);
+      const result = await createPlayerTicket(userId, username, emojis, walletAddress, fid);
       
       if (result.success) {
         toast.success('¡Ticket creado con éxito!');
@@ -87,6 +97,12 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
       return;
     }
     
+    // Verificar si el usuario está autenticado
+    if (!user || !user.id) {
+      toast.error('Debes iniciar sesión para crear tickets');
+      return;
+    }
+    
     try {
       setIsSubmitting(true);
       console.log('[TicketGenerator] Generando ticket aleatorio...');
@@ -98,11 +114,15 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
       console.log('[TicketGenerator] Enviando emojis para guardar en Firebase:', randomEmojis);
       onGenerateTicket(randomEmojis);
       
-      // Usamos también nuestro nuevo helper
-      const userId = `user_${Date.now()}`;
-      const username = 'Usuario de Juego';
+      // Usar los datos del usuario autenticado
+      const userId = user.id;
+      const username = user.username || 'Usuario';
+      const walletAddress = user.walletAddress;
+      const fid = user.fid;
       
-      const result = await createRandomTicket(userId, username);
+      console.log('[TicketGenerator] Datos del usuario para ticket aleatorio:', { userId, username, walletAddress, fid });
+      
+      const result = await createRandomTicket(userId, username, walletAddress, fid);
       
       if (result.success) {
         toast.success('¡Ticket aleatorio creado con éxito!');
@@ -138,13 +158,15 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
         
         <button
           onClick={handleRandomGenerate}
-          disabled={disabled || isSubmitting}
+          disabled={disabled || isSubmitting || !user}
           className={`w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 
                    rounded-xl shadow-lg transform transition hover:scale-105 
                    disabled:opacity-50 disabled:cursor-not-allowed
                    ${isSubmitting ? 'opacity-75 cursor-wait' : ''}`}
         >
-          {isSubmitting ? 'Generando...' : `Generate Random Ticket (${ticketCount}/${maxTickets} Today)`}
+          {isSubmitting ? 'Generando...' : 
+           !user ? 'Inicia sesión para crear tickets' :
+           `Generate Random Ticket (${ticketCount}/${maxTickets} Today)`}
         </button>
       </div>
     </div>

@@ -11,15 +11,25 @@ import { generateRandomEmojis } from './gameLogic';
  * @param username - Nombre del usuario
  * @param emojis - Array de emojis seleccionados (debe ser de longitud 4)
  * @param walletAddress - Dirección de wallet opcional
+ * @param fid - Farcaster ID opcional
  * @returns Un objeto con información del ticket o un mensaje de error
  */
 export const createPlayerTicket = async (
   userId: string,
   username: string,
   emojis: string[],
-  walletAddress?: string
+  walletAddress?: string,
+  fid?: number
 ): Promise<{ success: boolean; ticketId?: string; error?: string }> => {
   try {
+    // Verificar parámetros básicos
+    if (!userId || !username) {
+      return {
+        success: false,
+        error: 'Se requiere información del usuario (ID y nombre)'
+      };
+    }
+    
     // Verificar que se hayan seleccionado exactamente 4 emojis
     if (!emojis || emojis.length !== 4) {
       return {
@@ -42,10 +52,10 @@ export const createPlayerTicket = async (
       userId: userId,
       username: username,
       walletAddress: walletAddress || '0x' + userId.padStart(40, '0'), // Usar dirección proporcionada o simular una
-      fid: 0, // Por defecto 0 si no viene de Farcaster
-      isFarcasterUser: false,
-      verifiedWallet: false,
-      chainId: 10,
+      fid: fid || 0, // Usar FID proporcionado o 0 por defecto
+      isFarcasterUser: true, // Asumir que viene de Farcaster
+      verifiedWallet: !!walletAddress, // Si hay wallet, marcarla como verificada
+      chainId: 10, // Optimism por defecto
       ticketHash: uniqueHash,
       createdAt: new Date().toISOString()
     };
@@ -74,19 +84,21 @@ export const createPlayerTicket = async (
  * @param userId - ID del usuario
  * @param username - Nombre del usuario 
  * @param walletAddress - Dirección de wallet opcional
+ * @param fid - Farcaster ID opcional
  * @returns Un objeto con información del ticket o un mensaje de error
  */
 export const createRandomTicket = async (
   userId: string,
   username: string,
-  walletAddress?: string
+  walletAddress?: string,
+  fid?: number
 ): Promise<{ success: boolean; ticketId?: string; emojis?: string[]; error?: string }> => {
   try {
     // Generar 4 emojis aleatorios
     const randomEmojis = generateRandomEmojis(4);
     
     // Llamar a la función principal
-    const result = await createPlayerTicket(userId, username, randomEmojis, walletAddress);
+    const result = await createPlayerTicket(userId, username, randomEmojis, walletAddress, fid);
     
     return {
       ...result,
