@@ -23,7 +23,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFarcasterAvailable, setIsFarcasterAvailable] = useState(true); // Por defecto asumimos que está disponible
+  const [isFarcasterAvailable, setIsFarcasterAvailable] = useState(false);
   
   // Usar nuestro hook personalizado de Farcaster
   const { 
@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.log("Tiempo máximo de carga alcanzado, continuando sin autenticación");
+        console.log("Tiempo máximo de carga alcanzado");
         setIsLoading(false);
       }
     }, 5000); // 5 segundos máximo de carga
@@ -99,26 +99,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(authUser);
           } else {
             console.log("No se detectó usuario de Farcaster");
-            // En lugar de establecer null, creamos un usuario mínimo para no bloquear la aplicación
-            const tempUser: User = {
-              id: `temp-${Date.now()}`,
-              username: "Usuario Temporal",
-              isFarcasterUser: true, // Fingimos que es usuario Farcaster para que la app funcione
-              walletAddress: "0x0000000000000000000000000000000000000000", // Dirección ficticia
-              fid: 0 // FID ficticio
-            };
-            setUser(tempUser);
+            // No establecemos usuario si no hay usuario real
+            setUser(null);
           }
         }
       } catch (error) {
         console.error("Error en onAuthStateChanged:", error);
-        // Creamos un usuario temporal para no bloquear la aplicación
-        setUser({
-          id: `error-${Date.now()}`,
-          username: "Error Usuario",
-          isFarcasterUser: true,
-          walletAddress: "0x0000000000000000000000000000000000000000"
-        });
+        setUser(null);
       } finally {
         // Siempre terminar la carga
         setIsLoading(false);
@@ -129,8 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [farcasterUser, isFarcasterConnected]);
 
   const signIn = async () => {
-    if (user) return;
-    
     try {
       setIsLoading(true);
       
@@ -139,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTimeout(() => {
           console.log("Tiempo de espera de inicio de sesión agotado");
           resolve();
-        }, 3000); // 3 segundos máximo
+        }, 5000); // 5 segundos máximo
       });
       
       // Intentar primero con Farcaster
@@ -172,6 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log("Autenticación con Farcaster exitosa:", farcasterAuthUser);
             setUser(farcasterAuthUser);
             return;
+          } else {
+            console.log("No se pudo autenticar con Farcaster");
           }
         } catch (error) {
           console.error("Error en autenticación con Farcaster:", error);
@@ -181,25 +168,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Usar la que termine primero: autenticación o timeout
       await Promise.race([authPromise, timeoutPromise]);
       
-      // Si llegamos aquí y no tenemos usuario, crear uno temporal
-      if (!user) {
-        console.log("Creando usuario temporal para continuar");
-        setUser({
-          id: `temp-${Date.now()}`,
-          username: "Usuario Temporal",
-          isFarcasterUser: true,
-          walletAddress: "0x0000000000000000000000000000000000000000"
-        });
-      }
     } catch (error) {
-      console.error('Error signing in:', error);
-      // Crear usuario temporal en caso de error
-      setUser({
-        id: `error-${Date.now()}`,
-        username: "Error Usuario",
-        isFarcasterUser: true,
-        walletAddress: "0x0000000000000000000000000000000000000000"
-      });
+      console.error('Error en inicio de sesión:', error);
     } finally {
       setIsLoading(false);
     }

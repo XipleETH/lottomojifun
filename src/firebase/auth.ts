@@ -25,17 +25,9 @@ const fetchFarcasterProfileInfo = async (fid: number): Promise<FarcasterProfile 
     // Esta función debería hacer una llamada real a la API de Farcaster
     console.log(`Obteniendo información adicional de perfil para FID: ${fid}`);
     
-    // Aquí deberíamos obtener los datos reales, no simularlos
-    // Podemos usar la API pública de Neynar o el Hubble API de Farcaster
-    
-    // Por ahora, solo devolvemos información básica
-    return {
-      fid,
-      username: `user_${fid}`,
-      followerCount: 0,
-      followingCount: 0,
-      verifications: []
-    };
+    // Aquí deberíamos usar la API de Neynar o Hubble para obtener datos reales
+    // Por ahora, devolvemos null hasta implementar la integración real
+    return null;
   } catch (error) {
     console.error('Error obteniendo información adicional de Farcaster:', error);
     return null;
@@ -57,7 +49,7 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
         setTimeout(() => {
           console.log("Tiempo de espera agotado al obtener usuario de Farcaster");
           resolve(null);
-        }, 2000); // 2 segundos máximo
+        }, 3000); // 3 segundos máximo
       });
       
       // Crear la promesa para obtener el usuario
@@ -80,12 +72,10 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
           verifiedWallet = true;
         }
         
-        // Intentar obtener información adicional del perfil
-        let additionalInfo: FarcasterProfile | null = null;
-        try {
-          additionalInfo = await fetchFarcasterProfileInfo(user.fid);
-        } catch (e) {
-          console.log('No se pudo obtener información adicional del perfil');
+        // Si no hay dirección de wallet, no podemos continuar
+        if (!walletAddress) {
+          console.log('Usuario de Farcaster sin wallet verificada');
+          return null;
         }
         
         // Mapear los datos del usuario de Farcaster a nuestro tipo User
@@ -93,15 +83,11 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
           id: `farcaster-${user.fid}`,
           username: user.username || `farcaster-${user.fid}`,
           avatar: user.pfp || undefined,
-          walletAddress: walletAddress || undefined,
+          walletAddress: walletAddress,
           fid: user.fid,
           isFarcasterUser: true,
           verifiedWallet: verifiedWallet,
-          chainId: 10, // Optimism es la cadena principal para Farcaster
-          // Información adicional si está disponible
-          tokenBalance: "0",
-          nfts: [],
-          lastTransactionHash: undefined
+          chainId: 10 // Optimism es la cadena principal para Farcaster
         };
       })();
       
@@ -120,7 +106,19 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
 // Iniciar sesión con Farcaster
 export const signInWithFarcaster = async (): Promise<User | null> => {
   try {
-    // Intentar obtener usuario de Farcaster
+    if (!sdk) {
+      console.error('SDK de Farcaster no disponible');
+      return null;
+    }
+    
+    // Primero intentar iniciar sesión
+    try {
+      await sdk.actions.signIn();
+    } catch (e) {
+      console.error('Error en signIn de Farcaster:', e);
+    }
+    
+    // Luego intentar obtener usuario
     const farcasterUser = await getFarcasterUserData();
     if (farcasterUser) {
       return farcasterUser;
@@ -130,7 +128,7 @@ export const signInWithFarcaster = async (): Promise<User | null> => {
     console.log('No se pudo autenticar con Farcaster');
     return null;
   } catch (error) {
-    console.error('Error signing in with Farcaster:', error);
+    console.error('Error en signInWithFarcaster:', error);
     return null;
   }
 };
@@ -153,11 +151,12 @@ export const onAuthStateChanged = (callback: (user: User | null) => void) => {
     if (farcasterUser) {
       callback(farcasterUser);
     } else {
-      // Si no hay usuario de Farcaster, usamos Firebase
-      return onFirebaseAuthStateChanged(auth, (firebaseUser) => {
-        callback(mapFirebaseUser(firebaseUser));
-      });
+      // Si no hay usuario de Farcaster, devolvemos null
+      callback(null);
     }
+  }).catch(error => {
+    console.error('Error en onAuthStateChanged:', error);
+    callback(null);
   });
   
   // Devolver una función para limpiar
@@ -172,7 +171,6 @@ export const getCurrentUser = async (): Promise<User | null> => {
     return farcasterUser;
   }
   
-  // Si no hay usuario de Farcaster, devolver usuario de Firebase
-  const firebaseUser = auth.currentUser;
-  return mapFirebaseUser(firebaseUser);
+  // Si no hay usuario de Farcaster, devolver null
+  return null;
 }; 

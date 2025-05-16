@@ -43,9 +43,9 @@ export const WalletInfo: React.FC = () => {
   const [isChangingNetwork, setIsChangingNetwork] = useState(false);
   
   // Determinar la información de billetera a mostrar (priorizando Farcaster)
-  const walletAddress = farcasterAddress || user?.walletAddress || null;
-  const fid = farcasterFid || user?.fid || null;
-  const username = farcasterUsername || user?.username || null;
+  const walletAddress = farcasterAddress || user?.walletAddress;
+  const fid = farcasterFid || user?.fid;
+  const username = farcasterUsername || user?.username;
   const isConnected = isFarcasterConnected || isWalletConnected;
   const isConnecting = isFarcasterConnecting || isWalletConnecting;
   
@@ -99,6 +99,13 @@ export const WalletInfo: React.FC = () => {
             {farcasterError}
           </div>
         )}
+        
+        {isWarpcastApp && !isConnected && (
+          <div className="mt-2 p-2 bg-yellow-500/20 rounded text-yellow-200 text-xs">
+            Se requiere una billetera para participar en la lotería.
+            {isWarpcastApp && " Usa el botón de Conectar para autorizar tu billetera Farcaster."}
+          </div>
+        )}
       </div>
     );
   }
@@ -125,56 +132,60 @@ export const WalletInfo: React.FC = () => {
       
       {isExpanded && (
         <div className="mt-3 space-y-3">
-          <div className="bg-white/5 p-3 rounded">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-white/70">Dirección</span>
-              <span className="font-mono text-sm">{formatAddress(walletAddress)}</span>
-            </div>
-            
-            {fid && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/70">Farcaster ID</span>
-                <span>{fid}</span>
+          {walletAddress && (
+            <div className="bg-white/5 p-3 rounded">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-white/70">Dirección</span>
+                <span className="font-mono text-sm">{formatAddress(walletAddress)}</span>
               </div>
-            )}
-            
-            {username && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/70">Usuario</span>
-                <div className="flex items-center">
-                  <UserIcon size={12} className="mr-1" />
-                  <span>{username}</span>
+              
+              {fid && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Farcaster ID</span>
+                  <span>{fid}</span>
                 </div>
-              </div>
-            )}
-            
-            {/* Información de red */}
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-sm text-white/70">Red</span>
-              <div className="flex items-center gap-2">
-                <span className={isBaseNetwork ? "text-green-400" : "text-yellow-400"}>
-                  {getNetworkName(currentChainId)}
-                </span>
-                {!isBaseNetwork && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSwitchToBase();
-                    }}
-                    disabled={isChangingNetwork}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center transition-colors disabled:opacity-50"
-                  >
-                    {isChangingNetwork ? 'Cambiando...' : (
-                      <>
-                        <ArrowUpDown size={10} className="mr-1" />
-                        Cambiar a Base
-                      </>
+              )}
+              
+              {username && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Usuario</span>
+                  <div className="flex items-center">
+                    <UserIcon size={12} className="mr-1" />
+                    <span>{username}</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Información de red */}
+              {currentChainId && (
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm text-white/70">Red</span>
+                  <div className="flex items-center gap-2">
+                    <span className={isBaseNetwork ? "text-green-400" : "text-yellow-400"}>
+                      {getNetworkName(currentChainId)}
+                    </span>
+                    {!isBaseNetwork && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSwitchToBase();
+                        }}
+                        disabled={isChangingNetwork}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md text-xs font-medium flex items-center transition-colors disabled:opacity-50"
+                      >
+                        {isChangingNetwork ? 'Cambiando...' : (
+                          <>
+                            <ArrowUpDown size={10} className="mr-1" />
+                            Cambiar a Base
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
-                )}
-              </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
           
           {isWarpcastApp && (
             <div className="bg-white/5 p-2 rounded text-center text-xs text-white/60">
@@ -182,25 +193,29 @@ export const WalletInfo: React.FC = () => {
             </div>
           )}
           
-          <div className="flex items-center justify-between bg-white/5 p-3 rounded">
-            <div className="flex items-center">
-              <Coins size={16} className="mr-2 text-yellow-400" />
-              <span>Balance de Tokens</span>
+          {tokenBalance && (
+            <div className="flex items-center justify-between bg-white/5 p-3 rounded">
+              <div className="flex items-center">
+                <Coins size={16} className="mr-2 text-yellow-400" />
+                <span>Balance de Tokens</span>
+              </div>
+              <div className="flex items-center">
+                <span className="font-medium mr-2">{tokenBalance}</span>
+                {refreshWalletData && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      refreshWalletData();
+                    }}
+                    className="text-white/50 hover:text-white p-1 rounded-full hover:bg-white/10"
+                    disabled={isPendingTransaction}
+                  >
+                    <RefreshCw size={14} className={isPendingTransaction ? 'animate-spin' : ''} />
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center">
-              <span className="font-medium mr-2">{tokenBalance || '0'}</span>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  refreshWalletData();
-                }}
-                className="text-white/50 hover:text-white p-1 rounded-full hover:bg-white/10"
-                disabled={isPendingTransaction}
-              >
-                <RefreshCw size={14} className={isPendingTransaction ? 'animate-spin' : ''} />
-              </button>
-            </div>
-          </div>
+          )}
           
           {!isConnected ? (
             <button
@@ -215,7 +230,7 @@ export const WalletInfo: React.FC = () => {
             </button>
           ) : (
             <>
-              {nfts.length > 0 && (
+              {nfts && nfts.length > 0 && (
                 <div className="bg-white/5 p-3 rounded">
                   <div className="flex items-center mb-2">
                     <CircleDollarSign size={16} className="mr-2 text-pink-400" />
@@ -245,6 +260,14 @@ export const WalletInfo: React.FC = () => {
                       {lastTransaction.substring(0, 10)}...
                     </a>
                   </div>
+                </div>
+              )}
+              
+              {walletAddress && fid && (
+                <div className="bg-white/5 p-3 rounded text-center text-xs">
+                  <span className="text-white/60">
+                    Puedes usar esta billetera para interactuar con contratos en la red {isBaseNetwork ? 'Base' : getNetworkName(currentChainId)}
+                  </span>
                 </div>
               )}
             </>

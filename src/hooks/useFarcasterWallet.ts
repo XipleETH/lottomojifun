@@ -186,7 +186,7 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
         // Verificar la red
         console.log(`Red actual: ${currentChainId} (${isBaseNetwork ? 'Base' : 'No es Base'})`);
       } else {
-        console.warn("No se pudo establecer conexión con una billetera real");
+        console.warn("No se pudo establecer conexión con una billetera");
       }
     }
   };
@@ -263,8 +263,8 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
         }
       }
       
-      console.warn("No se pudo firmar el mensaje con la billetera, devolviendo firma simulada");
-      return `0x${Array.from(Array(128)).map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+      console.warn("No se pudo firmar el mensaje con la billetera");
+      return null;
     } catch (err) {
       console.error('Error firmando mensaje:', err);
       setError('Error al firmar mensaje con la billetera de Farcaster');
