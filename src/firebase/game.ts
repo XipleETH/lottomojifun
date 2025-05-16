@@ -17,9 +17,23 @@ import { GameResult, Ticket } from '../types';
 import { getCurrentUser } from './auth';
 
 const GAME_RESULTS_COLLECTION = 'game_results';
-const TICKETS_COLLECTION = 'tickets';
+const DEFAULT_TICKETS_COLLECTION = 'player_tickets'; // Cambiado a player_tickets por defecto
 const GAME_STATE_DOC = 'current_game_state';
 const RESULTS_LIMIT = 50;
+
+// Función para obtener el nombre de la colección de tickets activa
+const getTicketsCollectionName = async (): Promise<string> => {
+  try {
+    const stateDoc = await getDoc(doc(db, 'game_state', GAME_STATE_DOC));
+    const data = stateDoc.data();
+    
+    // Usar la colección especificada en el estado del juego o la predeterminada
+    return data?.ticketsCollection || DEFAULT_TICKETS_COLLECTION;
+  } catch (error) {
+    console.error('Error obteniendo nombre de colección de tickets:', error);
+    return DEFAULT_TICKETS_COLLECTION;
+  }
+};
 
 // Convertir documento de Firestore a nuestro tipo de resultado de juego
 const mapFirestoreGameResult = (doc: any): GameResult => {
@@ -63,11 +77,9 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       return null;
     }
     
-    // En el futuro, aquí podríamos verificar el balance de tokens antes de generar ticket
-    // if (parseFloat(user.tokenBalance || "0") < TICKET_PRICE) {
-    //   console.error('Error generating ticket: Insufficient token balance');
-    //   return null;
-    // }
+    // Obtener el nombre de la colección de tickets activa
+    const ticketsCollection = await getTicketsCollectionName();
+    console.log(`Usando colección de tickets: ${ticketsCollection}`);
     
     // Generar un hash único para el ticket (simulado)
     const uniqueHash = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
@@ -88,7 +100,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       ticketHash: uniqueHash
     };
     
-    const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
+    const ticketRef = await addDoc(collection(db, ticketsCollection), ticketData);
     
     // Simular una transacción en la blockchain (en el futuro esto sería real)
     console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
@@ -198,40 +210,44 @@ export const subscribeToUserTickets = (
 ) => {
   try {
     // Primero obtenemos el usuario actual como promesa
-    getCurrentUser().then(user => {
-    if (!user) {
-      callback([]);
-      return () => {};
-    }
-    
-    const ticketsQuery = query(
-      collection(db, TICKETS_COLLECTION),
-      where('userId', '==', user.id),
-      orderBy('timestamp', 'desc')
-    );
-    
-    return onSnapshot(ticketsQuery, (snapshot) => {
-      try {
-        const tickets = snapshot.docs.map(doc => {
-          try {
-            return mapFirestoreTicket(doc);
-          } catch (error) {
-            console.error('Error mapping ticket document:', error, doc.id);
-            return null;
-          }
-        }).filter(ticket => ticket !== null) as Ticket[];
-        
-        callback(tickets);
-      } catch (error) {
-        console.error('Error processing tickets snapshot:', error);
+    getCurrentUser().then(async user => {
+      if (!user) {
         callback([]);
+        return () => {};
       }
-    }, (error) => {
-      console.error('Error in subscribeToUserTickets:', error);
-      callback([]);
-    });
+      
+      // Obtener el nombre de la colección de tickets activa
+      const ticketsCollection = await getTicketsCollectionName();
+      console.log(`[subscribeToUserTickets] Usando colección de tickets: ${ticketsCollection}`);
+      
+      const ticketsQuery = query(
+        collection(db, ticketsCollection),
+        where('userId', '==', user.id),
+        orderBy('timestamp', 'desc')
+      );
+      
+      return onSnapshot(ticketsQuery, (snapshot) => {
+        try {
+          const tickets = snapshot.docs.map(doc => {
+            try {
+              return mapFirestoreTicket(doc);
+            } catch (error) {
+              console.error('Error mapping ticket document:', error, doc.id);
+              return null;
+            }
+          }).filter(ticket => ticket !== null) as Ticket[];
+          
+          callback(tickets);
+        } catch (error) {
+          console.error('Error processing tickets snapshot:', error);
+          callback([]);
+        }
+      }, (error) => {
+        console.error('Error in subscribeToUserTickets:', error);
+        callback([]);
+      });
     }).catch(error => {
-      console.error('Error getting current user:', error);
+      console.error('Error getting current user or tickets collection:', error);
       callback([]);
       return () => {};
     });

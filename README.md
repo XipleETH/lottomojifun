@@ -107,3 +107,53 @@ firebase deploy --only functions
 ```
 
 Asegúrate de tener un plan de facturación de Firebase que soporte funciones programadas (Blaze).
+
+## Configuración de Colecciones de Firebase
+
+El juego utiliza las siguientes colecciones en Firebase:
+
+- `game_state/current_game_state` - Documento que contiene el estado actual del juego
+- `player_tickets` - Colección principal que almacena los tickets de los jugadores
+- `game_results` - Colección que almacena los resultados de los sorteos
+- `chat_messages` - Colección que almacena los mensajes del chat
+
+### Migración a player_tickets
+
+Originalmente, el juego utilizaba una colección llamada `tickets`. Se ha implementado una migración a la nueva colección `player_tickets` con los siguientes scripts:
+
+#### Scripts de Migración e Inicialización
+
+1. **Inicializar Nueva Colección**:
+   ```bash
+   # Completa las credenciales de Firebase en el archivo antes de ejecutar
+   node src/scripts/initPlayerTickets.js
+   ```
+   Este script crea varios tickets de ejemplo en la nueva colección y actualiza la referencia en el documento de estado del juego.
+
+2. **Migrar Tickets Existentes**:
+   ```bash
+   # Completa las credenciales de Firebase en el archivo antes de ejecutar
+   node src/scripts/migrateTickets.js
+   ```
+   Este script migra todos los tickets de la colección `tickets` a la nueva colección `player_tickets`.
+
+3. **Verificar Estado de las Colecciones**:
+   ```bash
+   # Verificar en la consola de Firebase:
+   # - El documento game_state/current_game_state debe tener el campo ticketsCollection = "player_tickets"
+   # - La colección player_tickets debe contener tickets
+   ```
+
+## Reglas de Firebase
+
+Las reglas de Firestore están configuradas para ambas colecciones de tickets. Verifica que el archivo `firestore.rules` contenga las reglas para `player_tickets`.
+
+## Firebase Functions
+
+Las Cloud Functions han sido actualizadas para usar la nueva colección de tickets. Si realizas cambios en la configuración de colecciones, asegúrate de desplegar las funciones nuevamente:
+
+```bash
+firebase deploy --only functions
+```
+
+Asegúrate de tener un plan de facturación de Firebase que soporte funciones programadas (Blaze).
