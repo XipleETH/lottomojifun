@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { User } from '../types';
-import { onAuthStateChanged, signInWithFarcaster, signInAnonymousUser } from '../firebase/auth';
+import { onAuthStateChanged, signInWithFarcaster } from '../firebase/auth';
 import { useFarcasterWallet } from '../hooks/useFarcasterWallet';
 import { useMiniKitAuth } from '../providers/MiniKitProvider';
 
@@ -40,6 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Actualizar el estado cuando cambia el usuario de Farcaster
   useEffect(() => {
     if (farcasterUser) {
+      console.log("Estableciendo usuario de Farcaster desde MiniKitAuth:", farcasterUser);
       setUser(farcasterUser);
       setIsLoading(false);
     }
@@ -54,6 +55,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Si tenemos información de la billetera de Farcaster pero no un usuario completo,
     // crear uno basado en esos datos
     if (isFarcasterConnected && farcasterAddress && farcasterFid && !user) {
+      console.log("Creando usuario de Farcaster desde datos de billetera:", {
+        fid: farcasterFid,
+        address: farcasterAddress,
+        username: farcasterUsername
+      });
+      
       const newUser: User = {
         id: `farcaster-${farcasterFid}`,
         username: farcasterUsername || `farcaster-${farcasterFid}`,
@@ -73,7 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged((authUser) => {
       // Solo actualizar si no tenemos un usuario de Farcaster
       if (!farcasterUser && !isFarcasterConnected) {
-        setUser(authUser);
+        if (authUser?.isFarcasterUser) {
+          console.log("Estableciendo usuario desde onAuthStateChanged:", authUser);
+          setUser(authUser);
+        } else {
+          console.log("No se detectó usuario de Farcaster");
+          setUser(null);
+        }
       }
       setIsLoading(false);
     });
@@ -88,15 +101,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(true);
       
       // Intentar primero con Farcaster
-      // Prioridad: 1. MiniKit Farcaster, 2. Billetera Farcaster, 3. Anónimo
+      // Prioridad: 1. MiniKit Farcaster, 2. Billetera Farcaster
       if (farcasterUser) {
+        console.log("Iniciando sesión con usuario de MiniKit:", farcasterUser);
         setUser(farcasterUser);
         return;
       }
       
       if (!isFarcasterConnected) {
+        console.log("Intentando conectar billetera Farcaster");
         try {
           await connectFarcasterWallet();
+          console.log("Conexión con billetera Farcaster exitosa");
           // El efecto se encargará de actualizar el usuario
           return;
         } catch (error) {
@@ -104,23 +120,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      // Si no podemos autenticar con Farcaster, crear un usuario anónimo con atributos de Farcaster
-      const anonymousUser = await signInAnonymousUser();
-      
-      // Añadir marca de usuario de Farcaster para permitir el juego
-      if (anonymousUser) {
-        const enhancedUser: User = {
-          ...anonymousUser,
-          isFarcasterUser: true, // Marcamos como usuario de Farcaster aunque sea anónimo
-          walletAddress: anonymousUser.walletAddress || '0x0000000000000000000000000000000000000000',
-          fid: anonymousUser.fid || 0
-        };
-        setUser(enhancedUser);
-      } else {
-        setUser(anonymousUser);
+      // Intentar con API directa de Farcaster (esto puede no funcionar fuera de Warpcast)
+      try {
+        console.log("Intentando autenticar con API de Farcaster");
+        const farcasterAuthUser = await signInWithFarcaster();
+        if (farcasterAuthUser) {
+          console.log("Autenticación con Farcaster exitosa:", farcasterAuthUser);
+          setUser(farcasterAuthUser);
+          return;
+        }
+      } catch (error) {
+        console.error("Error en autenticación con Farcaster:", error);
       }
+      
+      // Si llegamos aquí, no pudimos autenticar con Farcaster
+      console.log("No se pudo autenticar con Farcaster");
+      setUser(null);
     } catch (error) {
       console.error('Error signing in:', error);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -129,6 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Auto sign-in if no user
   useEffect(() => {
     if (!user && !isLoading) {
+      console.log("Intentando auto-login");
       signIn();
     }
   }, [user, isLoading]);

@@ -27,7 +27,7 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
     connectFarcaster
   } = useMiniKitAuth();
 
-  // Determinar si está conectado
+  // Determinar si está conectado (requiere tanto usuario como dirección de billetera)
   const isConnected = !!farcasterUser && !!farcasterUser.walletAddress;
   
   // Obtener la dirección de la billetera
@@ -39,31 +39,51 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
   // Obtener el nombre de usuario
   const username = farcasterUser?.username || null;
 
+  // Diagnosticar el estado actual
+  useEffect(() => {
+    console.log("Estado actual de Farcaster:", {
+      isConnected,
+      address,
+      fid,
+      username,
+      user: farcasterUser
+    });
+  }, [isConnected, address, fid, username, farcasterUser]);
+
   // Conectar con la billetera de Farcaster
   const connect = async () => {
     try {
       setIsConnecting(true);
       setError(null);
       
+      console.log("Iniciando proceso de conexión de billetera Farcaster...");
+      
       // Usar el método de signIn de OnchainKit si estamos en Warpcast
       if (isWarpcastApp) {
+        console.log("Conectando en entorno Warpcast...");
+        
         // Si ya tenemos información del usuario de MiniKitAuthProvider
-        if (farcasterUser) {
+        if (farcasterUser && farcasterUser.walletAddress) {
+          console.log("Ya existe una conexión con billetera:", farcasterUser.walletAddress);
           return;
         }
         
         // Intentar conectar usando nuestro proveedor personalizado
+        console.log("Llamando a connectFarcaster desde MiniKitAuthProvider");
         await connectFarcaster();
       } else {
+        console.log("Conectando en entorno navegador...");
         // En un navegador normal, usar el SDK de Frame
         if (sdk && isFarcasterReady) {
           try {
+            console.log("Intentando signIn con Frame SDK");
             await sdk.actions.signIn();
           } catch (e) {
             console.error('Error en SDK signIn:', e);
             
             // Intentar con el método de OnchainKit como respaldo
             try {
+              console.log("Intentando signIn con OnchainKit");
               await signIn({
                 domain: window.location.host,
                 siweUri: window.location.origin
@@ -82,6 +102,13 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
       setError('Error al conectar con la billetera de Farcaster');
     } finally {
       setIsConnecting(false);
+      
+      // Verificar si la conexión fue exitosa
+      if (farcasterUser?.walletAddress) {
+        console.log("Conexión exitosa con billetera:", farcasterUser.walletAddress);
+      } else {
+        console.warn("No se pudo establecer conexión con una billetera");
+      }
     }
   };
 
@@ -99,13 +126,28 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
         throw new Error('No conectado a Farcaster o SDK no disponible');
       }
       
-      // En un entorno real, aquí deberíamos usar el SDK para solicitar una firma
-      // Actualmente el SDK de Farcaster no expone directamente esta funcionalidad
-      // pero la podemos simular para propósitos de demostración
+      console.log(`Intentando firmar mensaje con billetera Farcaster: "${message}"`);
       
-      console.log(`Simulando firma de mensaje: "${message}"`);
+      // En Farcaster, podemos usar el signer para firmar mensajes
+      if (sdk.signer) {
+        try {
+          // Esta funcionalidad puede no estar disponible en todas las versiones del SDK
+          console.log("Intentando usar signer nativo de Farcaster");
+          // const signature = await sdk.signer.signMessage(message);
+          // return signature;
+          
+          console.log("Firma nativa no implementada, simulando firma");
+        } catch (e) {
+          console.error("Error usando signer nativo:", e);
+        }
+      }
       
-      // Devolver un hash simulado como si fuera una firma
+      // Si llegamos aquí, no pudimos usar el signer nativo
+      // En un entorno real, intentaríamos usar métodos alternativos
+      console.log("Simulando firma de mensaje (implementación personalizada necesaria)");
+      
+      // IMPORTANTE: En producción, esto debería implementarse correctamente
+      // Devolver un hash simulado como si fuera una firma (solo para desarrollo)
       return `0x${Array.from(Array(128)).map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`;
     } catch (err) {
       console.error('Error firmando mensaje:', err);
@@ -120,6 +162,7 @@ export const useFarcasterWallet = (): FarcasterWalletHook => {
       if (context && !isConnected && !isConnecting) {
         // Si estamos en un frame y no estamos conectados, intentar conectar automáticamente
         if (context.client.added) {
+          console.log("Detectado frame, intentando conectar automáticamente");
           connect();
         }
       }

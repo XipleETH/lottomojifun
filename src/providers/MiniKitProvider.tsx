@@ -36,21 +36,34 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   useEffect(() => {
     const checkWarpcastEnvironment = async () => {
       try {
-        if (!sdk) return;
+        if (!sdk) {
+          console.error('ERROR: SDK de Farcaster no está disponible');
+          return;
+        }
+        
+        console.log('Inicializando SDK de Farcaster...');
         
         // Verificar si el SDK está listo
         await sdk.actions.ready();
         setIsFarcasterReady(true);
+        console.log('SDK de Farcaster listo');
         
         // Verificar si estamos en Warpcast
         const isFrame = await sdk.isFrameAvailable();
         setIsWarpcastApp(isFrame);
         
-        console.log('Farcaster environment:', { isFrame });
+        console.log('Entorno de Farcaster detectado:', { 
+          isFrame,
+          isSdkAvailable: !!sdk,
+          signer: !!sdk.signer
+        });
         
         // Si estamos en Warpcast, intentamos obtener el usuario automáticamente
         if (isFrame) {
+          console.log('Detectado Warpcast, obteniendo usuario automáticamente...');
           await checkAndSetFarcasterUser();
+        } else {
+          console.log('No estamos en Warpcast. El usuario deberá conectarse manualmente.');
         }
       } catch (error) {
         console.error('Error checking Farcaster environment:', error);
@@ -64,14 +77,23 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   const checkAndSetFarcasterUser = async () => {
     try {
       if (!sdk) {
-        console.log('SDK no disponible');
+        console.error('SDK no disponible');
         return false;
       }
       
+      console.log('Solicitando información de usuario a Farcaster...');
       const user = await sdk.getUser();
+      console.log('Respuesta de Farcaster getUser:', user);
+      
       if (!user) {
         console.log('No hay usuario autenticado en Farcaster');
         setFarcasterUser(null);
+        return false;
+      }
+      
+      // Verificar que tenemos la información mínima necesaria
+      if (!user.fid) {
+        console.error('ERROR: Usuario de Farcaster sin FID:', user);
         return false;
       }
       
@@ -87,7 +109,7 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         chainId: 10 // Optimism (cadena principal de Farcaster)
       };
       
-      console.log('Usuario de Farcaster mapeado:', mappedUser);
+      console.log('Usuario de Farcaster mapeado exitosamente:', mappedUser);
       setFarcasterUser(mappedUser);
       return true;
     } catch (error) {
@@ -104,11 +126,21 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         return;
       }
       
+      console.log('Intentando conectar con Farcaster...');
+      
       // En Warpcast, usamos el método signIn para conectar
       if (isWarpcastApp) {
+        console.log('Conectando en entorno Warpcast...');
         // Este método puede cambiar según la versión del SDK
         await sdk.actions.signIn();
-        await checkAndSetFarcasterUser();
+        console.log('Sign-in de Farcaster completado, verificando usuario...');
+        const success = await checkAndSetFarcasterUser();
+        
+        if (success) {
+          console.log('Conexión con Farcaster exitosa');
+        } else {
+          console.error('ERROR: No se pudo obtener usuario después de signIn');
+        }
       } else {
         // En un navegador normal, podemos redirigir a Warpcast o mostrar instrucciones
         console.log('Esta funcionalidad solo está disponible en Warpcast');
@@ -122,6 +154,7 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   // Desconectar de Farcaster
   const disconnectFarcaster = () => {
     setFarcasterUser(null);
+    console.log('Usuario de Farcaster desconectado');
   };
 
   // Verificar conexión con Farcaster

@@ -22,21 +22,19 @@ const mapFirebaseUser = (user: FirebaseUser | null): User | null => {
 // Función para obtener datos adicionales del perfil de Farcaster
 const fetchFarcasterProfileInfo = async (fid: number): Promise<FarcasterProfile | null> => {
   try {
-    // Simulamos una petición a la API de Farcaster para obtener más datos
-    // En producción, esto se reemplazaría con una llamada real a la API de Farcaster o Hubble
+    // Esta función debería hacer una llamada real a la API de Farcaster
     console.log(`Obteniendo información adicional de perfil para FID: ${fid}`);
     
-    // Simulamos un retraso de red
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Aquí deberíamos obtener los datos reales, no simularlos
+    // Podemos usar la API pública de Neynar o el Hubble API de Farcaster
     
-    // Por ahora devolvemos datos simulados
-    // En un entorno real, obtendríamos estos datos desde la API de Farcaster
+    // Por ahora, solo devolvemos información básica
     return {
       fid,
-      username: `user_${fid}`, // Esto se sobrescribirá con el username real
-      followerCount: Math.floor(Math.random() * 1000),
-      followingCount: Math.floor(Math.random() * 500),
-      verifications: [`0x${fid}abcdef1234567890`]
+      username: `user_${fid}`,
+      followerCount: 0,
+      followingCount: 0,
+      verifications: []
     };
   } catch (error) {
     console.error('Error obteniendo información adicional de Farcaster:', error);
@@ -49,77 +47,63 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
   try {
     // Verificar si el SDK de Farcaster está disponible y el usuario está autenticado
     if (!sdk) {
-      console.log('Farcaster SDK no disponible, creando usuario simulado');
-      // Crear un usuario simulado de Farcaster
-      return createSimulatedFarcasterUser();
+      console.error('ERROR: SDK de Farcaster no disponible');
+      return null;
     }
     
     try {
       // Obtener información básica del usuario
       const user = await sdk.getUser();
-      if (user) {
-        console.log('Usuario de Farcaster obtenido:', user);
-        
-        // Verificación de billetera
-        let verifiedWallet = false;
-        let walletAddress = user.custody_address;
-        
-        // Si tenemos una dirección de custodia, asumimos que está verificada
-        if (walletAddress) {
-          verifiedWallet = true;
-        }
-        
-        // Intentar obtener información adicional del perfil
-        let additionalInfo: FarcasterProfile | null = null;
-        try {
-          additionalInfo = await fetchFarcasterProfileInfo(user.fid);
-        } catch (e) {
-          console.log('No se pudo obtener información adicional del perfil');
-        }
-        
-        // Mapear los datos del usuario de Farcaster a nuestro tipo User
-        return {
-          id: `farcaster-${user.fid}`,
-          username: user.username || `farcaster-${user.fid}`,
-          avatar: user.pfp || undefined,
-          walletAddress: walletAddress || undefined,
-          fid: user.fid,
-          isFarcasterUser: true,
-          verifiedWallet: verifiedWallet,
-          chainId: 10, // Optimism es la cadena principal para Farcaster
-          // Información adicional si está disponible
-          tokenBalance: "0",
-          nfts: [],
-          lastTransactionHash: undefined
-        };
+      if (!user) {
+        console.log('No hay usuario autenticado en Farcaster');
+        return null;
       }
+      
+      console.log('Usuario de Farcaster obtenido:', user);
+      
+      // Verificación de billetera
+      let verifiedWallet = false;
+      let walletAddress = user.custody_address;
+      
+      // Si tenemos una dirección de custodia, asumimos que está verificada
+      if (walletAddress) {
+        verifiedWallet = true;
+      }
+      
+      // Intentar obtener información adicional del perfil
+      let additionalInfo: FarcasterProfile | null = null;
+      try {
+        additionalInfo = await fetchFarcasterProfileInfo(user.fid);
+      } catch (e) {
+        console.log('No se pudo obtener información adicional del perfil');
+      }
+      
+      // Mapear los datos del usuario de Farcaster a nuestro tipo User
+      return {
+        id: `farcaster-${user.fid}`,
+        username: user.username || `farcaster-${user.fid}`,
+        avatar: user.pfp || undefined,
+        walletAddress: walletAddress || undefined,
+        fid: user.fid,
+        isFarcasterUser: true,
+        verifiedWallet: verifiedWallet,
+        chainId: 10, // Optimism es la cadena principal para Farcaster
+        // Información adicional si está disponible
+        tokenBalance: "0",
+        nfts: [],
+        lastTransactionHash: undefined
+      };
     } catch (error) {
-      console.log('Error obteniendo usuario de Farcaster, creando usuario simulado:', error);
+      console.error('Error obteniendo usuario de Farcaster:', error);
+      return null;
     }
     
-    // Si no podemos obtener el usuario de Farcaster, crear uno simulado
-    return createSimulatedFarcasterUser();
+    // No usar fallback de usuario simulado
+    return null;
   } catch (error) {
     console.error('Error obteniendo datos de Farcaster:', error);
-    return createSimulatedFarcasterUser();
+    return null;
   }
-};
-
-// Función para crear un usuario simulado de Farcaster
-const createSimulatedFarcasterUser = (): User => {
-  const randomId = Math.floor(Math.random() * 1000000).toString();
-  const walletAddress = `0x${randomId.padStart(40, '0')}`;
-  return {
-    id: `farcaster-simulated-${randomId}`,
-    username: `FarcasterUser-${randomId.substring(0, 4)}`,
-    walletAddress,
-    fid: parseInt(randomId),
-    isFarcasterUser: true,
-    verifiedWallet: true,
-    chainId: 10, // Optimism
-    tokenBalance: "0",
-    nfts: []
-  };
 };
 
 // Iniciar sesión con Farcaster
