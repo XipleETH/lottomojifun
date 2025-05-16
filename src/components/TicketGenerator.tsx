@@ -4,6 +4,7 @@ import { generateRandomEmojis } from '../utils/gameLogic';
 import { createPlayerTicket, createRandomTicket } from '../utils/ticketHelper';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../components/AuthProvider';
+import { useMiniKitAuth } from '../providers/MiniKitProvider';
 
 interface TicketGeneratorProps {
   onGenerateTicket: (numbers: string[]) => void;
@@ -20,7 +21,8 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
 }) => {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user } = useAuth(); // Obtener la información del usuario autenticado
+  const { user, isLoading: isUserLoading } = useAuth(); // Obtener la información del usuario autenticado
+  const { isWarpcastApp } = useMiniKitAuth(); // Verificar si estamos en Warpcast
 
   // Reset selected emojis when ticket count changes to 0
   useEffect(() => {
@@ -31,6 +33,16 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
 
   const handleEmojiSelect = (emoji: string) => {
     if (disabled || isSubmitting) return;
+    
+    // Si no hay usuario, mostrar un mensaje de error apropiado
+    if (!user) {
+      if (isWarpcastApp) {
+        toast.error('Esperando autenticación de Warpcast... Por favor, intenta de nuevo en unos segundos');
+      } else {
+        toast.error('Debes iniciar sesión para crear tickets');
+      }
+      return;
+    }
     
     const newSelection = [...selectedEmojis, emoji];
     setSelectedEmojis(newSelection);
@@ -48,9 +60,13 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   const handleTicketCreation = async (emojis: string[]) => {
     if (disabled || isSubmitting) return;
     
-    // Verificar si el usuario está autenticado
+    // Verificar si el usuario está autenticado con un mensaje específico para Warpcast
     if (!user || !user.id) {
-      toast.error('Debes iniciar sesión para crear tickets');
+      if (isWarpcastApp) {
+        toast.error('Esperando conexión con Warpcast... Por favor, intenta de nuevo en unos segundos');
+      } else {
+        toast.error('Debes iniciar sesión para crear tickets');
+      }
       return;
     }
     
@@ -97,9 +113,13 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
       return;
     }
     
-    // Verificar si el usuario está autenticado
+    // Verificar si el usuario está autenticado con un mensaje específico para Warpcast
     if (!user || !user.id) {
-      toast.error('Debes iniciar sesión para crear tickets');
+      if (isWarpcastApp) {
+        toast.error('Esperando conexión con Warpcast... Por favor, intenta de nuevo en unos segundos');
+      } else {
+        toast.error('Debes iniciar sesión para crear tickets');
+      }
       return;
     }
     
@@ -165,6 +185,8 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
                    ${isSubmitting ? 'opacity-75 cursor-wait' : ''}`}
         >
           {isSubmitting ? 'Generando...' : 
+           isUserLoading && isWarpcastApp ? 'Conectando con Warpcast...' :
+           !user && isWarpcastApp ? 'Esperando conexión con Warpcast...' :
            !user ? 'Inicia sesión para crear tickets' :
            `Generate Random Ticket (${ticketCount}/${maxTickets} Today)`}
         </button>

@@ -147,10 +147,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [farcasterUser, isFarcasterConnected, user]);
 
+  // Auto sign-in solo si está en Warpcast y no ha intentado antes
+  useEffect(() => {
+    if (isWarpcastApp && !user && !isLoading && !hasAttemptedSignIn) {
+      console.log("Iniciando auto-login en Warpcast");
+      signIn();
+    } else if (isWarpcastApp && !user && !isLoading) {
+      console.log("Auto-login ya intentado, pero usuario aún no autenticado en Warpcast");
+      // Intentar nuevamente después de un tiempo
+      const retryTimeout = setTimeout(() => {
+        if (!user) {
+          console.log("Reintentando autenticación en Warpcast...");
+          setHasAttemptedSignIn(false); // Resetear para permitir nuevo intento
+          signIn();
+        }
+      }, 2000);
+      
+      return () => clearTimeout(retryTimeout);
+    }
+  }, [isWarpcastApp, user, isLoading, hasAttemptedSignIn]);
+
   const signIn = async () => {
     try {
       setIsLoading(true);
       setHasAttemptedSignIn(true);
+      
+      console.log("Iniciando proceso de inicio de sesión en Warpcast");
       
       // Establecer un tiempo máximo para el proceso de inicio de sesión
       const timeoutPromise = new Promise<void>((resolve) => {
@@ -167,6 +189,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(farcasterUser);
         setIsLoading(false);
         return;
+      }
+      
+      // En Warpcast, tenemos un enfoque especial
+      if (isWarpcastApp) {
+        console.log("Estamos en Warpcast, usando método específico para autenticación");
+        try {
+          if (sdk) {
+            // Intentar directamente obtener el usuario primero
+            const user = await sdk.getUser();
+            if (user && user.fid) {
+              console.log("Usuario de Warpcast obtenido directamente:", user);
+              // Mapear el usuario a nuestro formato
+              const warpcastUser: User = {
+                id: `farcaster-${user.fid}`,
+                username: user.username || `farcaster-${user.fid}`,
+                avatar: user.pfp || undefined,
+                walletAddress: user.custody_address || `0x${user.fid.toString().padStart(40, '0')}`,
+                fid: user.fid,
+                isFarcasterUser: true,
+                verifiedWallet: !!user.custody_address,
+                chainId: 10 // Optimism es la cadena principal para Farcaster
+              };
+              setUser(warpcastUser);
+              setIsLoading(false);
+              return;
+            }
+            
+            // Si no hay usuario, intentar signIn
+            await sdk.actions.signIn();
+            console.log("Sign-in de Warpcast completado, verificando usuario...");
+            
+            // Verificar usuario nuevamente
+            const newUser = await sdk.getUser();
+            if (newUser && newUser.fid) {
+              console.log("Usuario de Warpcast obtenido después de signIn:", newUser);
+              // Mapear el usuario a nuestro formato
+              const warpcastUser: User = {
+                id: `farcaster-${newUser.fid}`,
+                username: newUser.username || `farcaster-${newUser.fid}`,
+                avatar: newUser.pfp || undefined,
+                walletAddress: newUser.custody_address || `0x${newUser.fid.toString().padStart(40, '0')}`,
+                fid: newUser.fid,
+                isFarcasterUser: true,
+                verifiedWallet: !!newUser.custody_address,
+                chainId: 10 // Optimism
+              };
+              setUser(warpcastUser);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (warpcastError) {
+          console.error("Error en autenticación específica de Warpcast:", warpcastError);
+        }
       }
       
       // Crear una promesa para el proceso de autenticación
@@ -208,14 +284,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   };
-
-  // Auto sign-in solo si está en Warpcast y no ha intentado antes
-  useEffect(() => {
-    if (isWarpcastApp && !user && !isLoading && !hasAttemptedSignIn) {
-      console.log("Iniciando auto-login en Warpcast");
-      signIn();
-    }
-  }, [isWarpcastApp, user, isLoading, hasAttemptedSignIn]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, signIn, isFarcasterAvailable }}>

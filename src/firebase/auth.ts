@@ -65,18 +65,15 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
         
         // Verificación de billetera
         let verifiedWallet = false;
-        let walletAddress = user.custody_address;
+        let walletAddress = user.custody_address || '';
         
         // Si tenemos una dirección de custodia, asumimos que está verificada
         if (walletAddress) {
           verifiedWallet = true;
         }
         
-        // Si no hay dirección de wallet, no podemos continuar
-        if (!walletAddress) {
-          console.log('Usuario de Farcaster sin wallet verificada');
-          return null;
-        }
+        // Importante: Ya no requerimos wallet para continuar
+        // Ahora permitimos usuarios de Farcaster sin wallet conectada
         
         // Mapear los datos del usuario de Farcaster a nuestro tipo User
         return {

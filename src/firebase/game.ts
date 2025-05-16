@@ -71,11 +71,8 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       return null;
     }
     
-    // Verificar que el usuario tenga una billetera
-    if (!user.walletAddress) {
-      console.error('Error generating ticket: User does not have a wallet address');
-      return null;
-    }
+    // Ya no requerimos billetera obligatoria - usamos una dirección genérica en su lugar
+    const walletAddress = user.walletAddress || `0x${user.id.replace('farcaster-', '')}`; 
     
     // Verificar que los números sean exactamente 4 emojis
     if (!numbers || numbers.length !== 4) {
@@ -96,7 +93,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       timestamp: serverTimestamp(),
       userId: user.id,
       username: user.username,
-      walletAddress: user.walletAddress,
+      walletAddress: walletAddress,
       fid: user.fid || 0,
       isFarcasterUser: true,
       verifiedWallet: user.verifiedWallet || false,
@@ -108,7 +105,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
     // Guardar el ticket en Firestore
     const ticketRef = await addDoc(collection(db, ticketsCollection), ticketData);
     
-    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${user.walletAddress})`);
+    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${walletAddress})`);
     console.log(`Emojis seleccionados: ${numbers.join(' ')}`);
     
     // Devolver el ticket creado
@@ -117,7 +114,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       numbers,
       timestamp: Date.now(),
       userId: user.id,
-      walletAddress: user.walletAddress,
+      walletAddress: walletAddress,
       fid: user.fid
     };
   } catch (error) {

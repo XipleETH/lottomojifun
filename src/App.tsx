@@ -13,6 +13,7 @@ import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
 import { Toaster } from 'react-hot-toast';
+import { WarpcastStatus } from './components/WarpcastStatus';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -140,6 +141,9 @@ function App() {
             )}
           </div>
         </div>
+        
+        {/* Componente de estado de Warpcast */}
+        <WarpcastStatus />
         
         {/* Componente de información de billetera */}
         {user?.isFarcasterUser && (

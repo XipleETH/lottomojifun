@@ -79,7 +79,12 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
             setIsFarcasterReady(true);
           }
           
-          // Verificar si estamos en Warpcast
+          // Mejorar la detección de Warpcast
+          // Método 1: Verificar si estamos en un iframe
+          const inIframe = window !== window.parent;
+          console.log('¿Estamos en un iframe?', inIframe);
+          
+          // Método 2: Usar isFrameAvailable con un tiempo límite para evitar bloqueos
           let isFrame = false;
           try {
             isFrame = await Promise.race([
@@ -90,47 +95,49 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
             console.warn('Error detectando frame, asumiendo false', frameError);
           }
           
-          setIsWarpcastApp(isFrame);
+          // Método 3: Verificar la URL para palabras clave de Warpcast
+          const isWarpcastUrl = window.location.hostname.includes('warpcast') || 
+                               window.location.href.includes('warpcast.com');
+          
+          // Decidir si estamos en Warpcast basándonos en múltiples factores
+          const detectedAsWarpcast = isFrame || isWarpcastUrl || inIframe;
+          
+          setIsWarpcastApp(detectedAsWarpcast);
           
           console.log('Entorno de Farcaster detectado:', { 
             isFrame,
+            isWarpcastUrl,
+            inIframe,
+            detectedAsWarpcast,
             isSdkAvailable: !!sdk,
             signer: !!sdk.signer
           });
           
-          // Si estamos en Warpcast, intentamos obtener el usuario automáticamente
-          if (isFrame) {
+          // En cualquier caso, intentamos obtener el usuario 
+          if (detectedAsWarpcast) {
             console.log('Detectado Warpcast, obteniendo usuario automáticamente...');
             checkAndSetFarcasterUser().catch(err => 
               console.error('Error obteniendo usuario inicial:', err)
             );
-            
-            // Intentar detectar qué red está utilizando el usuario
-            try {
-              if (window.ethereum) {
-                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-                const chainId = parseInt(chainIdHex, 16);
-                setCurrentChainId(chainId);
-                console.log(`Red actual detectada: ${chainId} (${getNetworkName(chainId)})`);
-              }
-            } catch (chainError) {
-              console.error('Error detectando red actual:', chainError);
-            }
           } else {
-            console.log('No estamos en Warpcast. El usuario deberá conectarse manualmente.');
-            
-            // Intentar detectar la red de todos modos
-            try {
-              if (window.ethereum) {
-                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-                const chainId = parseInt(chainIdHex, 16);
-                setCurrentChainId(chainId);
-                console.log(`Red detectada: ${chainId} (${getNetworkName(chainId)})`);
-              }
-            } catch (chainError) {
-              console.error('Error detectando red:', chainError);
-            }
+            console.log('No estamos en Warpcast. Intentando obtener usuario de todos modos...');
+            checkAndSetFarcasterUser().catch(err =>
+              console.error('Error obteniendo usuario fuera de Warpcast:', err)
+            );
           }
+          
+          // Intentar detectar qué red está utilizando el usuario
+          try {
+            if (window.ethereum) {
+              const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+              const chainId = parseInt(chainIdHex, 16);
+              setCurrentChainId(chainId);
+              console.log(`Red actual detectada: ${chainId} (${getNetworkName(chainId)})`);
+            }
+          } catch (chainError) {
+            console.error('Error detectando red actual:', chainError);
+          }
+          
         } catch (error) {
           console.error('Error durante la inicialización de Farcaster:', error);
         } finally {
@@ -297,12 +304,18 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         }
       }
       
+      // Si aún no hay billetera, utilizar una dirección derivada del FID (solo para identificación)
+      if (!detectedWallet) {
+        detectedWallet = `0x${user.fid.toString().padStart(40, '0')}`;
+        console.log(`Usando billetera simulada basada en FID: ${detectedWallet}`);
+      }
+      
       // Mapear los datos del usuario de Farcaster
       const mappedUser: User = {
         id: `farcaster-${user.fid}`,
         username: user.username || `farcaster-${user.fid}`,
         avatar: user.pfp || undefined,
-        walletAddress: detectedWallet || undefined,
+        walletAddress: detectedWallet,
         fid: user.fid,
         isFarcasterUser: true,
         verifiedWallet: verifiedWallet,
