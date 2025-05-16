@@ -1,200 +1,187 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Smile, RefreshCcw, HelpCircle } from 'lucide-react';
 import { EmojiGrid } from './EmojiGrid';
-import { generateRandomEmojis } from '../utils/gameLogic';
-import { createPlayerTicket, createRandomTicket } from '../utils/ticketHelper';
+import { NoMoreTickets } from './NoMoreTickets';
 import { toast } from 'react-hot-toast';
-import { useAuth } from '../components/AuthProvider';
-import { useMiniKitAuth } from '../providers/MiniKitProvider';
 import { useWarpcast } from '../providers/WarpcastProvider';
-import { User } from '../types';
+import { useOnchainConnection } from '../hooks/useOnchainConnection';
 
 interface TicketGeneratorProps {
-  onGenerateTicket: (numbers: string[]) => void;
-  disabled: boolean;
+  onGenerateTicket: (emojis: string[]) => void;
+  disabled?: boolean;
   ticketCount: number;
   maxTickets: number;
 }
 
 export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   onGenerateTicket,
-  disabled,
+  disabled = false,
   ticketCount,
   maxTickets
 }) => {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user: authUser, isLoading: authLoading } = useAuth();
-  const { user: warpcastUser, isLoading: warpcastLoading, isWarpcastApp } = useWarpcast();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const { isWarpcastApp } = useWarpcast();
+  const { isWarpcastApp: isOnchainWarpcast } = useOnchainConnection();
   
-  // Determinar el usuario activo (priorizar Warpcast si está disponible)
-  const user = warpcastUser || authUser;
-  const isUserLoading = warpcastLoading || authLoading;
+  // Determinar si estamos en entorno Warpcast
+  const isInWarpcastEnv = isWarpcastApp || isOnchainWarpcast;
 
-  // Reset selected emojis when ticket count changes to 0
+  // Reset selección cuando cambia el contador de tickets
   useEffect(() => {
-    if (ticketCount === 0) {
-      setSelectedEmojis([]);
-    }
+    setSelectedEmojis([]);
   }, [ticketCount]);
 
-  const handleEmojiSelect = (emoji: string) => {
-    if (disabled || isSubmitting) return;
-    
-    // Si no hay usuario, mostrar un mensaje de error apropiado
-    if (!user) {
-      if (isWarpcastApp) {
-        toast.error('Esperando autenticación de Warpcast... Por favor, intenta de nuevo en unos segundos');
-      } else {
-        toast.error('Debes iniciar sesión para crear tickets');
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    setSelectedEmojis(prev => {
+      // Si ya está seleccionado, eliminarlo
+      if (prev.includes(emoji)) {
+        return prev.filter(e => e !== emoji);
       }
-      return;
-    }
-    
-    const newSelection = [...selectedEmojis, emoji];
-    setSelectedEmojis(newSelection);
-    
-    if (newSelection.length === 4) {
-      handleTicketCreation(newSelection);
-    }
-  };
-
-  const handleEmojiDeselect = (index: number) => {
-    if (isSubmitting) return;
-    setSelectedEmojis(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleTicketCreation = async (emojis: string[]) => {
-    if (disabled || isSubmitting) return;
-    
-    // Verificar si el usuario está autenticado con un mensaje específico para Warpcast
-    if (!user || !user.id) {
-      if (isWarpcastApp) {
-        toast.error('Esperando conexión con Warpcast... Por favor, intenta de nuevo en unos segundos');
-      } else {
-        toast.error('Debes iniciar sesión para crear tickets');
+      
+      // Si ya tenemos 4 emojis, reemplazar el último
+      if (prev.length >= 4) {
+        const newSelection = [...prev];
+        newSelection[3] = emoji;
+        return newSelection;
       }
-      return;
-    }
-    
+      
+      // Agregar nuevo emoji a la selección
+      return [...prev, emoji];
+    });
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
     try {
-      setIsSubmitting(true);
-      
-      // Primero, usar la función original para mantener la compatibilidad con el sistema
-      onGenerateTicket(emojis);
-      
-      // Usar los datos del usuario autenticado
-      const userId = user.id;
-      const username = user.username || 'Usuario';
-      const walletAddress = user.walletAddress;
-      const fid = user.fid;
-      
-      console.log('[TicketGenerator] Creando ticket con emojis:', emojis.join(' '));
-      console.log('[TicketGenerator] Datos del usuario:', { userId, username, walletAddress, fid });
-      
-      const result = await createPlayerTicket(userId, username, emojis, walletAddress, fid);
-      
-      if (result.success) {
-        toast.success('¡Ticket creado con éxito!');
-        console.log(`[TicketGenerator] Ticket guardado en player_tickets: ${result.ticketId}`);
-        
-        // Limpiar selección después de generar el ticket
-        setTimeout(() => {
-          setSelectedEmojis([]);
-          setIsSubmitting(false);
-        }, 1000);
-      } else {
-        toast.error(`Error: ${result.error}`);
-        setIsSubmitting(false);
-      }
-    } catch (error) {
-      console.error('[TicketGenerator] Error creando ticket:', error);
-      toast.error('Error al crear el ticket');
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleRandomGenerate = async () => {
-    if (disabled || isSubmitting) {
-      console.log('[TicketGenerator] Generación de ticket aleatorio deshabilitada');
-      return;
-    }
-    
-    // Verificar si el usuario está autenticado con un mensaje específico para Warpcast
-    if (!user || !user.id) {
-      if (isWarpcastApp) {
-        toast.error('Esperando conexión con Warpcast... Por favor, intenta de nuevo en unos segundos');
-      } else {
-        toast.error('Debes iniciar sesión para crear tickets');
-      }
-      return;
-    }
-    
-    try {
-      setIsSubmitting(true);
-      console.log('[TicketGenerator] Generando ticket aleatorio...');
-      
-      // Generar 4 emojis aleatorios únicos
-      const randomEmojis = generateRandomEmojis(4);
-      
-      // Enviar al hook para que los guarde en Firebase
-      console.log('[TicketGenerator] Enviando emojis para guardar en Firebase:', randomEmojis);
-      onGenerateTicket(randomEmojis);
-      
-      // Usar los datos del usuario autenticado
-      const userId = user.id;
-      const username = user.username || 'Usuario';
-      const walletAddress = user.walletAddress;
-      const fid = user.fid;
-      
-      console.log('[TicketGenerator] Datos del usuario para ticket aleatorio:', { userId, username, walletAddress, fid });
-      
-      const result = await createRandomTicket(userId, username, walletAddress, fid);
-      
-      if (result.success) {
-        toast.success('¡Ticket aleatorio creado con éxito!');
-        console.log(`[TicketGenerator] Ticket aleatorio guardado en player_tickets: ${result.ticketId}`);
-      } else {
-        toast.error(`Error: ${result.error}`);
+      if (selectedEmojis.length !== 4) {
+        toast.error('Debes seleccionar exactamente 4 emojis');
+        return;
       }
       
-      // Feedback visual al usuario
-      setSelectedEmojis([...randomEmojis]);
+      setIsGenerating(true);
       
-      // Limpiar después de un momento
+      // Mostrar mensaje de procesamiento
+      toast.loading('Generando ticket...', { id: 'generating-ticket' });
+      
+      // Generar ticket con un pequeño timeout para permitir UI feedback
       setTimeout(() => {
-        setSelectedEmojis([]);
-        setIsSubmitting(false);
-      }, 1000);
+        try {
+          onGenerateTicket(selectedEmojis);
+          
+          // Mostrar mensaje de éxito
+          toast.success('¡Ticket generado correctamente!', { id: 'generating-ticket' });
+          
+          // Limpiar selección después de éxito
+          setSelectedEmojis([]);
+        } catch (error) {
+          console.error('Error en callback de generación:', error);
+          toast.error('Error al generar ticket', { id: 'generating-ticket' });
+        } finally {
+          setIsGenerating(false);
+        }
+      }, 800);
     } catch (error) {
-      console.error('[TicketGenerator] Error generando ticket aleatorio:', error);
-      toast.error('Error al crear el ticket aleatorio');
-      setIsSubmitting(false);
+      console.error('Error en handleGenerate:', error);
+      toast.error('Error al procesar la solicitud');
+      setIsGenerating(false);
     }
-  };
+  }, [selectedEmojis, onGenerateTicket]);
+
+  const resetSelection = useCallback(() => {
+    setSelectedEmojis([]);
+  }, []);
+
+  // Si se ha alcanzado el máximo de tickets, mostrar mensaje
+  if (disabled || ticketCount >= maxTickets) {
+    return <NoMoreTickets maxTickets={maxTickets} />;
+  }
 
   return (
-    <div className="mb-8 space-y-4">
-      <div className="flex flex-col gap-4">
-        <EmojiGrid
-          selectedEmojis={selectedEmojis}
-          onEmojiSelect={handleEmojiSelect}
-          onEmojiDeselect={handleEmojiDeselect}
-          maxSelections={4}
-        />
+    <div className="mb-8 bg-white/10 p-4 rounded-xl border border-white/20">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-white">
+          <Smile className="inline mr-2" size={24} /> Elige 4 emojis
+        </h2>
         
+        <div className="flex gap-2">
+          <button
+            onClick={resetSelection}
+            className="bg-gray-700/50 hover:bg-gray-700 text-white p-2 rounded-lg"
+            title="Reiniciar selección"
+          >
+            <RefreshCcw size={18} />
+          </button>
+          
+          <button
+            onClick={() => setShowHelp(!showHelp)}
+            className="bg-gray-700/50 hover:bg-gray-700 text-white p-2 rounded-lg"
+            title="Cómo jugar"
+          >
+            <HelpCircle size={18} />
+          </button>
+        </div>
+      </div>
+      
+      {showHelp && (
+        <div className="mb-4 p-3 bg-white/20 rounded-lg text-white/90 text-sm">
+          <p className="mb-2">
+            <strong>Cómo jugar:</strong>
+          </p>
+          <ol className="list-decimal list-inside">
+            <li>Selecciona exactamente 4 emojis para tu ticket</li>
+            <li>Cada minuto se realiza un sorteo automático</li>
+            <li>Ganas si tus emojis coinciden con los números ganadores</li>
+            <li>Puedes tener hasta {maxTickets} tickets activos simultáneamente</li>
+          </ol>
+        </div>
+      )}
+      
+      {isInWarpcastEnv && (
+        <div className="mb-4 p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg text-white text-sm">
+          <p>
+            <span className="font-semibold">Miniapp de Warpcast:</span> Estás jugando desde Warpcast. Tus tickets se generarán usando tu cuenta de Farcaster.
+          </p>
+        </div>
+      )}
+      
+      <div className="mb-4">
+        <div className="flex items-center mb-2">
+          <span className="text-white mr-2">Emojis seleccionados:</span>
+          <div className="flex gap-1 bg-white/10 rounded-lg p-1 min-h-10 items-center">
+            {selectedEmojis.length === 0 ? (
+              <span className="text-white/60 text-sm px-3">Selecciona emojis abajo</span>
+            ) : (
+              selectedEmojis.map((emoji, index) => (
+                <span key={index} className="text-2xl">{emoji}</span>
+              ))
+            )}
+            {selectedEmojis.length > 0 && selectedEmojis.length < 4 && (
+              <span className="text-white/60 text-xs px-2">
+                {4 - selectedEmojis.length} más
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <p className="text-white/70 text-xs mb-2">
+          Tickets: {ticketCount}/{maxTickets}
+        </p>
+      </div>
+      
+      <EmojiGrid onEmojiSelect={handleEmojiSelect} selectedEmojis={selectedEmojis} />
+      
+      <div className="mt-4 flex justify-center">
         <button
-          onClick={handleRandomGenerate}
-          disabled={disabled || isSubmitting || !user}
-          className={`w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 
-                   rounded-xl shadow-lg transform transition hover:scale-105 
-                   disabled:opacity-50 disabled:cursor-not-allowed
-                   ${isSubmitting ? 'opacity-75 cursor-wait' : ''}`}
+          onClick={handleGenerate}
+          disabled={selectedEmojis.length !== 4 || isGenerating}
+          className={`py-3 px-6 rounded-lg text-white font-semibold transition-colors ${
+            selectedEmojis.length !== 4 || isGenerating
+              ? 'bg-gray-500 cursor-not-allowed'
+              : 'bg-indigo-600 hover:bg-indigo-700'
+          }`}
         >
-          {isSubmitting ? 'Generando...' : 
-           isUserLoading && isWarpcastApp ? 'Conectando con Warpcast...' :
-           !user && isWarpcastApp ? 'Esperando conexión con Warpcast...' :
-           !user ? 'Inicia sesión para crear tickets' :
-           `Generate Random Ticket (${ticketCount}/${maxTickets} Today)`}
+          {isGenerating ? 'Generando...' : 'Generar Ticket'}
         </button>
       </div>
     </div>

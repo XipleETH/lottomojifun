@@ -65,14 +65,28 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
   try {
     const user = await getCurrentUser();
     
-    // Verificar que el usuario esté autenticado con Farcaster
+    // Verificar que el usuario esté autenticado como usuario de Farcaster
+    // Nota: Ya no requerimos wallet conectada para generar tickets
     if (!user || !user.isFarcasterUser) {
       console.error('Error generating ticket: User is not authenticated with Farcaster');
       return null;
     }
     
-    // Ya no requerimos billetera obligatoria - usamos una dirección genérica en su lugar
-    const walletAddress = user.walletAddress || `0x${user.id.replace('farcaster-', '')}`; 
+    // Garantizar que siempre tengamos una dirección de wallet
+    // Si el usuario no tiene wallet conectada, generamos una dirección derivada de su ID
+    let walletAddress = user.walletAddress;
+    if (!walletAddress || walletAddress.length < 40) {
+      // Generar una dirección basada en el ID o FID
+      if (user.fid && user.fid > 0) {
+        // Si tenemos FID pero no wallet, usar un patrón consistente
+        walletAddress = `0x${user.fid.toString().padStart(40, '0')}`;
+      } else {
+        // Si no tenemos ni wallet ni FID, generar basado en el ID
+        const idHash = user.id.replace(/[^a-zA-Z0-9]/g, '');
+        walletAddress = `0x${idHash.padEnd(40, '0').substring(0, 40)}`;
+      }
+      console.log(`Usuario sin wallet conectada. Usando dirección derivada: ${walletAddress}`);
+    }
     
     // Verificar que los números sean exactamente 4 emojis
     if (!numbers || numbers.length !== 4) {
@@ -84,7 +98,7 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
     const ticketsCollection = await getTicketsCollectionName();
     console.log(`Usando colección de tickets: ${ticketsCollection}`);
     
-    // Generar un hash único para el ticket (simulado)
+    // Generar un hash único para el ticket
     const uniqueHash = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
     
     // Incluir información detallada de Farcaster en el ticket
@@ -92,20 +106,36 @@ export const generateTicket = async (numbers: string[]): Promise<Ticket | null> 
       numbers,
       timestamp: serverTimestamp(),
       userId: user.id,
-      username: user.username,
+      username: user.username || 'Farcaster User',
       walletAddress: walletAddress,
       fid: user.fid || 0,
       isFarcasterUser: true,
       verifiedWallet: user.verifiedWallet || false,
       chainId: user.chainId || 10, // Optimism por defecto
       ticketHash: uniqueHash,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      source: 'warpcast_miniapp'
     };
     
-    // Guardar el ticket en Firestore
-    const ticketRef = await addDoc(collection(db, ticketsCollection), ticketData);
+    // Guardar el ticket en Firestore con reintentos
+    let ticketRef;
+    const maxRetries = 3;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        ticketRef = await addDoc(collection(db, ticketsCollection), ticketData);
+        break; // Si llega aquí, el guardado fue exitoso
+      } catch (retryError) {
+        console.error(`Error en intento ${i+1}/${maxRetries} guardando ticket:`, retryError);
+        if (i === maxRetries - 1) throw retryError; // Re-lanzar en el último intento
+        await new Promise(resolve => setTimeout(resolve, 500)); // Esperar antes de reintentar
+      }
+    }
     
-    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid}, Wallet: ${walletAddress})`);
+    if (!ticketRef) {
+      throw new Error('No se pudo crear el ticket después de múltiples intentos');
+    }
+    
+    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid || 'N/A'}, Wallet: ${walletAddress})`);
     console.log(`Emojis seleccionados: ${numbers.join(' ')}`);
     
     // Devolver el ticket creado

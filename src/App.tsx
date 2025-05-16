@@ -16,6 +16,7 @@ import { Toaster } from 'react-hot-toast';
 import { WarpcastStatus } from './components/WarpcastStatus';
 import { DirectWarpcastAuth } from './components/DirectWarpcastAuth';
 import { useWarpcast } from './providers/WarpcastProvider';
+import { useOnchainConnection } from './hooks/useOnchainConnection';
 import { User } from './types';
 
 function App() {
@@ -24,34 +25,50 @@ function App() {
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
   const { user: authUser, isLoading: authLoading, isFarcasterAvailable, signIn: authSignIn } = useAuth();
-  const { user: warpcastUser, isLoading: warpcastLoading, isWarpcastApp } = useWarpcast();
+  const { user: warpcastUser, isLoading: warpcastLoading, isWarpcastApp: isWarpcastFrameApp } = useWarpcast();
+  const { user: onchainUser, isLoading: onchainLoading, isWarpcastApp: isOnchainWarpcastApp } = useOnchainConnection();
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [renderStable, setRenderStable] = useState(false);
   
-  // Estado local para el usuario (priorizar Warpcast si está disponible)
+  // Determinar si estamos en entorno Warpcast (cualquier detección)
+  const isWarpcastEnvironment = isWarpcastFrameApp || isOnchainWarpcastApp || isFarcasterAvailable;
+  
+  // Estado local para el usuario (priorizar Warpcast > OnchainKit > Auth)
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Gestionar usuario activo
+  // Gestionar usuario activo con priorización clara
   useEffect(() => {
-    // Prioridad: warpcastUser > authUser
+    // Definir orden de prioridad para usuarios
     if (warpcastUser) {
+      console.log('Estableciendo usuario activo desde Warpcast Frame:', warpcastUser);
       setActiveUser(warpcastUser);
       setIsLoading(false);
+    } else if (onchainUser) {
+      console.log('Estableciendo usuario activo desde OnchainKit:', onchainUser);
+      setActiveUser(onchainUser);
+      setIsLoading(false);
     } else if (authUser) {
+      console.log('Estableciendo usuario activo desde Auth general:', authUser);
       setActiveUser(authUser);
       setIsLoading(false);
     } else {
-      // No hay usuario, pero si tenemos isWarpcastApp y no está cargando, consideramos no cargando
-      if (isWarpcastApp && !warpcastLoading) {
-        setIsLoading(false);
-      }
-      // En otros casos, si authLoading = false, consideramos no cargando
-      else if (!authLoading) {
+      // Sin usuario - verificar estado de carga
+      const allProvidersLoaded = 
+        (!warpcastLoading || !isWarpcastFrameApp) &&
+        (!onchainLoading || !isOnchainWarpcastApp) &&
+        (!authLoading || !isFarcasterAvailable);
+      
+      if (allProvidersLoaded) {
+        console.log('Todos los proveedores terminaron de cargar, sin usuario activo');
         setIsLoading(false);
       }
     }
-  }, [warpcastUser, authUser, warpcastLoading, authLoading, isWarpcastApp]);
+  }, [
+    warpcastUser, onchainUser, authUser, 
+    warpcastLoading, onchainLoading, authLoading, 
+    isWarpcastFrameApp, isOnchainWarpcastApp, isFarcasterAvailable
+  ]);
 
   // Manejador para cuando DirectWarpcastAuth autentique exitosamente
   const handleDirectAuth = (user: User) => {
@@ -123,13 +140,16 @@ function App() {
           Esta aplicación solo está disponible para usuarios de Farcaster Warpcast.
         </p>
         
+        {/* Componente de estado de Warpcast */}
+        <WarpcastStatus />
+        
         {/* Mostrar componente de autenticación directa de Warpcast */}
         <DirectWarpcastAuth 
           onAuthSuccess={handleDirectAuth}
-          autoSignIn={isWarpcastApp}
+          autoSignIn={isWarpcastEnvironment}
         />
         
-        {!isWarpcastApp && (
+        {!isWarpcastEnvironment && (
           <button
             onClick={() => authSignIn()}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
@@ -139,7 +159,7 @@ function App() {
         )}
       </div>
     </div>
-  ), [authSignIn, handleDirectAuth, isWarpcastApp]);
+  ), [authSignIn, handleDirectAuth, isWarpcastEnvironment]);
 
   // Si no hemos estabilizado el renderizado, mostrar la página de carga
   if (!renderStable) {
