@@ -11,13 +11,14 @@ import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
+import { WalletInfo } from './components/WalletInfo';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
   const { context } = useMiniKit();
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
-  const { user, isLoading, isFarcasterAvailable } = useAuth();
+  const { user, isLoading, isFarcasterAvailable, signIn } = useAuth();
   const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   // Inicializar Firebase y SDK
@@ -31,7 +32,9 @@ function App() {
   }, [gameState.lastResults]);
 
   const handleWin = async () => {
-    if (gameState.lastResults?.firstPrize?.length > 0) {
+    // Usar verificación de seguridad para evitar errores undefined
+    const firstPrizeLength = gameState.lastResults?.firstPrize?.length || 0;
+    if (firstPrizeLength > 0) {
       try {
         await sendNotification({
           title: '🎉 You Won!',
@@ -63,7 +66,7 @@ function App() {
             Esta aplicación solo está disponible para usuarios de Farcaster Warpcast.
           </p>
           <button
-            onClick={() => sdk.actions.signIn()}
+            onClick={() => signIn()}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
             Iniciar sesión con Farcaster
@@ -121,12 +124,19 @@ function App() {
           </div>
         </div>
         
-          <p className="text-white/90 text-xl mb-4">
-            Match 4 emojis to win! 🏆
-          </p>
-          <p className="text-white/80">Next draw in:</p>
-          <div className="flex justify-center mt-4">
-            <Timer seconds={gameState.timeRemaining} />
+        {/* Componente de información de billetera */}
+        {user?.isFarcasterUser && (
+          <div className="mb-6">
+            <WalletInfo />
+          </div>
+        )}
+        
+        <p className="text-white/90 text-xl mb-4">
+          Match 4 emojis to win! 🏆
+        </p>
+        <p className="text-white/80">Next draw in:</p>
+        <div className="flex justify-center mt-4">
+          <Timer seconds={gameState.timeRemaining} />
         </div>
 
         <WinnerAnnouncement 
