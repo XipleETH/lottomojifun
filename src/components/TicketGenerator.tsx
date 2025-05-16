@@ -162,18 +162,18 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
             <span className="text-white/70 text-sm">{selectedEmojis.length}/4</span>
           </div>
           
-          <EmojiGrid
-            selectedEmojis={selectedEmojis}
-            onEmojiSelect={handleEmojiSelect}
-            onEmojiDeselect={handleEmojiDeselect}
-            maxSelections={4}
-          />
+        <EmojiGrid
+          selectedEmojis={selectedEmojis}
+          onEmojiSelect={handleEmojiSelect}
+          onEmojiDeselect={handleEmojiDeselect}
+          maxSelections={4}
+        />
         </div>
         
         {/* Botones de acción */}
         <div className="flex gap-2 flex-col sm:flex-row">
-          <button
-            onClick={handleRandomGenerate}
+        <button
+          onClick={handleRandomGenerate}
             disabled={disabled || isPurchasing}
             className={`flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 
                      rounded-xl transition-colors flex items-center justify-center gap-2
@@ -188,8 +188,8 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
             disabled={disabled || isPurchasing || selectedEmojis.length !== 4 || !isConnected}
             className={`flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 
                      rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2
-                     disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
+                   disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
             {isPurchasing ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
@@ -201,7 +201,7 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
                 <span>Comprar Ticket (1 USDC)</span>
               </>
             )}
-          </button>
+        </button>
         </div>
         
         {/* Información de límite */}

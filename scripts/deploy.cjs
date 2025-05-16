@@ -1,5 +1,6 @@
-import { ethers, network } from "hardhat";
-import { run } from "hardhat";
+// @ts-check
+const { ethers, network } = require("hardhat");
+const { run } = require("hardhat");
 
 async function main() {
   try {

@@ -154,12 +154,12 @@ function App() {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="md:col-span-2">
-            <p className="text-white/90 text-xl mb-4">
+        <p className="text-white/90 text-xl mb-4">
               Elige 4 emojis y gana USDC! 🏆
-            </p>
+        </p>
             <p className="text-white/80 mb-2">Próximo sorteo en:</p>
             <div className="flex justify-center mb-6">
-              <Timer seconds={gameState.timeRemaining} />
+          <Timer seconds={gameState.timeRemaining} />
             </div>
           </div>
           

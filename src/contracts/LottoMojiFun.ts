@@ -54,8 +54,10 @@ export const usdcAbi = parseAbi([
 
 // Direcciones de contratos en Base
 export const CONTRACT_ADDRESSES = {
-  LOTTO_MOJI_FUN: '0x0000000000000000000000000000000000000000' as Address, // Actualizar después del despliegue
-  USDC: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA' as Address, // USDC en Base
+  LOTTO_MOJI_FUN: '0xA92937B6De354298C0aAb704C073203ABd83Ef7c' as Address, // Mainnet
+  // LOTTO_MOJI_FUN: '0x0889850Ca65443b6693443bc9eaaaC2b561ab4a3' as Address, // Testnet (Sepolia)
+  USDC: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA' as Address, // USDC en Base Mainnet
+  // USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as Address, // USDC en Base Sepolia
 };
 
 // Tipos para los resultados del contrato
