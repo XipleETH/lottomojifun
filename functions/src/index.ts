@@ -4,6 +4,18 @@ import * as admin from 'firebase-admin';
 // Inicializar la aplicación de Firebase
 admin.initializeApp();
 
+// Definir interfaces para los tipos de datos
+interface FarcasterEvent {
+  type: string;
+  data: FarcasterEventData;
+}
+
+interface FarcasterEventData {
+  userId?: string;
+  type?: string;
+  [key: string]: unknown;
+}
+
 // Webhook para procesar eventos de Farcaster
 export const farcasterWebhook = functions.https.onRequest(async (req, res) => {
   try {
@@ -14,7 +26,7 @@ export const farcasterWebhook = functions.https.onRequest(async (req, res) => {
     }
 
     // Obtener y verificar el evento de Farcaster
-    const event = req.body;
+    const event = req.body as FarcasterEvent;
     console.log('Evento de Farcaster recibido:', event);
 
     // Procesar diferentes tipos de eventos
@@ -50,7 +62,7 @@ export const farcasterWebhook = functions.https.onRequest(async (req, res) => {
 });
 
 // Procesar evento APP_ADDED
-async function handleAppAdded(data: any) {
+async function handleAppAdded(data: FarcasterEventData) {
   if (!data || !data.userId) return;
 
   try {
@@ -69,7 +81,7 @@ async function handleAppAdded(data: any) {
 }
 
 // Procesar evento APP_REMOVED
-async function handleAppRemoved(data: any) {
+async function handleAppRemoved(data: FarcasterEventData) {
   if (!data || !data.userId) return;
 
   try {
@@ -87,7 +99,7 @@ async function handleAppRemoved(data: any) {
 }
 
 // Procesar interacción de usuario
-async function handleUserInteraction(data: any) {
+async function handleUserInteraction(data: FarcasterEventData) {
   if (!data || !data.userId) return;
 
   try {
