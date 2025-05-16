@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { useFarcasterWallet } from './useFarcasterWallet';
-import { LottoMojiFun } from '../contracts/LottoMojiFun';
+import { LottoMojiFun, CONTRACT_ADDRESSES } from '../contracts/LottoMojiFun';
 import { createWalletClient, custom, parseUnits } from 'viem';
 import { base } from 'viem/chains';
 import { toast } from 'react-hot-toast';
@@ -12,20 +12,57 @@ export interface TicketPurchaseOptions {
   onPending?: () => void;
 }
 
+// Instancia compartida del contrato
+let lottoContractInstance: LottoMojiFun | null = null;
+
 export function useTicketPurchase(options?: TicketPurchaseOptions) {
   const { user } = useAuth();
   const { address, fid, isConnected, currentChainId, switchToBase } = useFarcasterWallet();
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isContractReady, setIsContractReady] = useState(false);
   
-  // Instancia del contrato
-  const lottoContract = new LottoMojiFun();
+  // Inicializar la instancia del contrato solo una vez
+  useEffect(() => {
+    if (!lottoContractInstance) {
+      try {
+        console.log('Inicializando contrato LottoMojiFun en useTicketPurchase...');
+        lottoContractInstance = new LottoMojiFun(CONTRACT_ADDRESSES.LOTTO_MOJI_FUN);
+        setIsContractReady(true);
+      } catch (err) {
+        console.error('Error inicializando contrato:', err);
+        setError('Error inicializando contrato. Por favor, recarga la página.');
+      }
+    } else {
+      setIsContractReady(true);
+    }
+  }, []);
+  
+  // Obtener la instancia del contrato
+  const getLottoContract = useCallback(() => {
+    if (!lottoContractInstance) {
+      try {
+        lottoContractInstance = new LottoMojiFun(CONTRACT_ADDRESSES.LOTTO_MOJI_FUN);
+        return lottoContractInstance;
+      } catch (err) {
+        console.error('Error creando nueva instancia del contrato:', err);
+        throw new Error('No se pudo inicializar el contrato');
+      }
+    }
+    return lottoContractInstance;
+  }, []);
   
   /**
    * Compra un ticket con los emojis seleccionados
    */
   const purchaseTicket = useCallback(async (emojis: string[]) => {
+    if (!isContractReady) {
+      setError('El contrato aún no está listo. Por favor, espera un momento.');
+      options?.onError?.(new Error('Contrato no inicializado'));
+      return null;
+    }
+    
     if (!isConnected || !address || !fid) {
       setError('No hay billetera conectada. Conéctate primero con Farcaster.');
       options?.onError?.(new Error('No hay billetera conectada'));
@@ -45,8 +82,16 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
         }
       }
       
+      // Obtener instancia del contrato
+      const lottoContract = getLottoContract();
+      
+      // Comprobar si window.ethereum está disponible
+      if (!window.ethereum) {
+        throw new Error('No se encontró proveedor de Ethereum. ¿Tienes instalada una billetera?');
+      }
+      
       // Crear cliente de billetera
-      if (window.ethereum) {
+      try {
         const walletClient = createWalletClient({
           chain: base,
           transport: custom(window.ethereum)
@@ -56,18 +101,9 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
         
         // Notificar que la transacción está pendiente
         options?.onPending?.();
-        toast.loading('Aprobando gasto de USDC...');
-        
-        // Aprobar gasto de USDC
-        const ticketPrice = await lottoContract.getTicketPrice();
-        const approveTxHash = await lottoContract.approveUsdcSpending(address, ticketPrice);
-        
-        // Esperar confirmación de aprobación
-        toast.loading('Esperando confirmación de aprobación...');
-        await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
+        toast.loading('Comprando ticket...');
         
         // Comprar ticket
-        toast.loading('Comprando ticket...');
         const txHash = await lottoContract.buyTicket(address, emojis, BigInt(fid));
         
         setLastTxHash(txHash);
@@ -75,8 +111,9 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
         toast.success('¡Ticket comprado con éxito!');
         
         return txHash;
-      } else {
-        throw new Error('No se encontró proveedor de Ethereum');
+      } catch (walletError: any) {
+        console.error('Error con la billetera:', walletError);
+        throw new Error(`Error de billetera: ${walletError.message || 'Error desconocido'}`);
       }
     } catch (err: any) {
       console.error('Error comprando ticket:', err);
@@ -87,12 +124,18 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
     } finally {
       setIsPurchasing(false);
     }
-  }, [isConnected, address, fid, currentChainId, switchToBase, options]);
+  }, [isConnected, address, fid, currentChainId, switchToBase, options, isContractReady, getLottoContract]);
   
   /**
    * Reclama un premio para un ticket ganador
    */
   const claimPrize = useCallback(async (ticketId: bigint) => {
+    if (!isContractReady) {
+      setError('El contrato aún no está listo. Por favor, espera un momento.');
+      options?.onError?.(new Error('Contrato no inicializado'));
+      return null;
+    }
+    
     if (!isConnected || !address) {
       setError('No hay billetera conectada. Conéctate primero con Farcaster.');
       options?.onError?.(new Error('No hay billetera conectada'));
@@ -112,8 +155,16 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
         }
       }
       
+      // Obtener instancia del contrato
+      const lottoContract = getLottoContract();
+      
+      // Comprobar si window.ethereum está disponible
+      if (!window.ethereum) {
+        throw new Error('No se encontró proveedor de Ethereum. ¿Tienes instalada una billetera?');
+      }
+      
       // Crear cliente de billetera
-      if (window.ethereum) {
+      try {
         const walletClient = createWalletClient({
           chain: base,
           transport: custom(window.ethereum)
@@ -133,8 +184,9 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
         toast.success('¡Premio reclamado con éxito!');
         
         return txHash;
-      } else {
-        throw new Error('No se encontró proveedor de Ethereum');
+      } catch (walletError: any) {
+        console.error('Error con la billetera:', walletError);
+        throw new Error(`Error de billetera: ${walletError.message || 'Error desconocido'}`);
       }
     } catch (err: any) {
       console.error('Error reclamando premio:', err);
@@ -145,7 +197,7 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
     } finally {
       setIsPurchasing(false);
     }
-  }, [isConnected, address, currentChainId, switchToBase, options]);
+  }, [isConnected, address, currentChainId, switchToBase, options, isContractReady, getLottoContract]);
   
   /**
    * Obtiene el balance de USDC del usuario
@@ -154,12 +206,13 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
     if (!address) return '0';
     
     try {
+      const lottoContract = getLottoContract();
       return await lottoContract.getUsdcBalance(address);
     } catch (err) {
       console.error('Error obteniendo balance de USDC:', err);
       return '0';
     }
-  }, [address]);
+  }, [address, getLottoContract]);
   
   return {
     purchaseTicket,
@@ -170,6 +223,7 @@ export function useTicketPurchase(options?: TicketPurchaseOptions) {
     error,
     isConnected,
     address,
-    fid
+    fid,
+    isContractReady
   };
 } 
