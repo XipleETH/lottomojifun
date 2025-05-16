@@ -11,6 +11,7 @@ import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
+import { initializeTicketsCollection } from './firebase/initTickets';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
@@ -36,6 +37,20 @@ function App() {
     };
     
     initSDK();
+  }, []);
+  
+  // Inicializar la colección de tickets si no existe
+  useEffect(() => {
+    const initTickets = async () => {
+      try {
+        console.log('Comprobando si la colección de tickets existe...');
+        await initializeTicketsCollection();
+      } catch (error) {
+        console.error('Error al inicializar la colección de tickets:', error);
+      }
+    };
+    
+    initTickets();
   }, []);
 
   // Intentar inicio de sesión automático si no hay usuario
