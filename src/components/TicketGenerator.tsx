@@ -51,6 +51,10 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
       return [...prev, emoji];
     });
   }, []);
+  
+  const handleEmojiDeselect = useCallback((index: number) => {
+    setSelectedEmojis(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleGenerate = useCallback(async () => {
     try {
@@ -169,7 +173,12 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
         </p>
       </div>
       
-      <EmojiGrid onEmojiSelect={handleEmojiSelect} selectedEmojis={selectedEmojis} />
+      <EmojiGrid 
+        onEmojiSelect={handleEmojiSelect} 
+        selectedEmojis={selectedEmojis}
+        onEmojiDeselect={handleEmojiDeselect}
+        maxSelections={4}
+      />
       
       <div className="mt-4 flex justify-center">
         <button

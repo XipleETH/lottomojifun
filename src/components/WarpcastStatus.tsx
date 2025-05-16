@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from './AuthProvider';
 import { useMiniKitAuth } from '../providers/MiniKitProvider';
 import { useWarpcast } from '../providers/WarpcastProvider';
 import { useOnchainConnection } from '../hooks/useOnchainConnection';
+import { User } from '../types';
+import { toast } from 'react-hot-toast';
 
 /**
  * Componente mejorado que muestra el estado de conexión con Warpcast
@@ -19,6 +21,55 @@ export const WarpcastStatus: React.FC = () => {
   
   // Combinar detecciones de Warpcast
   const isInWarpcast = isWarpcastApp || isOnchainWarpcast || isFarcasterAvailable;
+  
+  // Error específico del SDK
+  const isSdkError = error?.includes('SDK') || error?.includes('sdk');
+
+  // Crear usuario genérico de emergencia cuando todo lo demás falla
+  const createEmergencyUser = useCallback(() => {
+    try {
+      // Mostrar toast de carga
+      toast.loading('Creando sesión de emergencia...', { id: 'emergency-user' });
+      
+      console.log('Creando usuario genérico de emergencia desde WarpcastStatus');
+      
+      // Generar ID y dirección únicos
+      const timestamp = Date.now();
+      const tempId = `farcaster-emergency-${timestamp}`;
+      const tempAddr = `0x${timestamp.toString(16).padStart(40, '0')}`;
+      
+      // Crear usuario genérico
+      const genericUser: User = {
+        id: tempId,
+        username: 'Warpcast User',
+        walletAddress: tempAddr,
+        fid: 0,
+        isFarcasterUser: true,
+        verifiedWallet: false,
+        chainId: 10 // Optimism por defecto
+      };
+      
+      console.log('Usuario genérico de emergencia creado:', genericUser);
+      
+      // Guardar en localStorage para futuras referencias
+      try {
+        localStorage.setItem('warpcast_emergency_user', JSON.stringify(genericUser));
+      } catch (e) {
+        console.warn('Error guardando usuario de emergencia en localStorage:', e);
+      }
+      
+      // Mostrar mensaje de éxito
+      toast.success('Sesión de emergencia creada. Recarga la página.', { id: 'emergency-user' });
+      
+      // Forzar recarga después de un breve retraso
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (e) {
+      console.error('Error creando usuario de emergencia:', e);
+      toast.error('Error creando sesión de emergencia', { id: 'emergency-user' });
+    }
+  }, []);
 
   // Si no estamos en Warpcast y no hay debug, no mostramos nada
   if (!isInWarpcast && !showDebug) {
@@ -71,28 +122,70 @@ export const WarpcastStatus: React.FC = () => {
           </div>
         </div>
         
-        <div className="mt-2 flex justify-center">
+        <div className="mt-2 flex justify-center gap-2">
           <button 
             onClick={() => retry()}
             className="bg-blue-600 text-white py-1 px-3 rounded text-xs"
           >
             Reintentar conexión
           </button>
+          
+          <button 
+            onClick={createEmergencyUser}
+            className="bg-red-600 text-white py-1 px-3 rounded text-xs"
+            title="Usa esto solo si ninguna otra opción funciona"
+          >
+            Crear usuario de emergencia
+          </button>
         </div>
       </div>
     );
   }
 
-  // Si hay un error, mostrarlo
+  // Si hay un error de SDK, mostrar mensaje especial con enlace a solución
+  if (isSdkError) {
+    return (
+      <div className="text-center p-3 mb-4 bg-amber-100 rounded-lg border border-amber-300">
+        <p className="text-sm text-amber-800 mb-2">
+          <strong>Error del SDK de Farcaster:</strong> No se pudo conectar con Warpcast.
+        </p>
+        <div className="text-xs text-amber-700 mb-2">
+          Esto puede ocurrir si estás usando una versión antigua de la aplicación o hay un problema de conexión.
+        </div>
+        <div className="flex justify-center items-center gap-3">
+          <button 
+            onClick={() => retry()}
+            className="text-xs bg-amber-600 text-white py-1 px-3 rounded"
+          >
+            Reintentar
+          </button>
+          <button 
+            onClick={createEmergencyUser}
+            className="text-xs bg-amber-700 text-white py-1 px-3 rounded"
+          >
+            Usar modo de emergencia
+          </button>
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-xs text-amber-700 underline"
+          >
+            Diagnóstico
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Si hay un error normal, mostrarlo
   if (error) {
     return (
       <div className="text-center p-2 mb-4 bg-red-100 rounded-lg border border-red-200 flex items-center justify-between">
         <p className="text-sm text-red-700">
           Error: {error}
         </p>
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <button 
-            className="text-xs mr-2 text-red-500 underline"
+            className="text-xs text-red-500 underline"
             onClick={() => retry()}
           >
             Reintentar
@@ -115,12 +208,20 @@ export const WarpcastStatus: React.FC = () => {
         <p className="text-sm text-yellow-700">
           Conectando con Warpcast... Por favor espera.
         </p>
-        <button 
-          onClick={() => setShowDebug(!showDebug)}
-          className="text-xs text-blue-500 underline"
-        >
-          Diagnóstico
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={createEmergencyUser}
+            className="text-xs text-yellow-700 underline"
+          >
+            Modo emergencia
+          </button>
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-xs text-blue-500 underline"
+          >
+            Diagnóstico
+          </button>
+        </div>
       </div>
     );
   }
@@ -160,12 +261,20 @@ export const WarpcastStatus: React.FC = () => {
           <p className="text-sm text-blue-700">
             Detectado entorno Warpcast - Esperando autenticación...
           </p>
-          <button 
-            className="text-xs mt-1 text-blue-500 underline"
-            onClick={() => retry()}
-          >
-            Conectar
-          </button>
+          <div className="flex gap-2 mt-1">
+            <button 
+              className="text-xs text-blue-500 underline"
+              onClick={() => retry()}
+            >
+              Conectar
+            </button>
+            <button 
+              className="text-xs text-blue-700 underline"
+              onClick={createEmergencyUser}
+            >
+              Modo emergencia
+            </button>
+          </div>
         </div>
         <button 
           onClick={() => setShowDebug(!showDebug)}

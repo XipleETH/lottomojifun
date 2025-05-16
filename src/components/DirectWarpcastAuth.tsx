@@ -2,28 +2,45 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { User } from '../types';
 import { toast } from 'react-hot-toast';
 
-// Intentar obtener el SDK de Farcaster de manera segura
+// Intentar obtener el SDK de Farcaster de manera más agresiva
 // Esto es crítico para evitar errores con versiones del SDK
+let sdkAttempts = 0;
 let sdk: any;
-try {
-  // Intentar importar directamente del módulo
-  sdk = require('@farcaster/frame-sdk').sdk;
-} catch (e) {
-  console.warn('Error importando SDK de Farcaster directamente:', e);
+
+const getSdk = () => {
+  if (sdk) return sdk;
+  
   try {
-    // Intentar obtener desde window
-    sdk = window.Farcaster?.sdk || 
-          window.frameWarpcast?.sdk || 
-          (window as any).fc_sdk || 
-          (window as any).farcaster?.sdk;
+    // Intentar múltiples formas de obtener el SDK
+    const possibleSdks = [
+      require('@farcaster/frame-sdk')?.sdk,
+      window.Farcaster?.sdk,
+      window.frameWarpcast?.sdk,
+      (window as any).fc_sdk,
+      (window as any).farcaster?.sdk,
+      (window as any).frame?.sdk,
+      (window as any)._farcaster?.sdk
+    ];
     
-    if (!sdk) {
-      console.warn('SDK no encontrado en window, buscando globales alternativos');
+    // Usar el primer SDK válido que encontremos
+    for (const possibleSdk of possibleSdks) {
+      if (possibleSdk && typeof possibleSdk === 'object') {
+        console.log('SDK encontrado:', possibleSdk);
+        sdk = possibleSdk;
+        return sdk;
+      }
     }
+    
+    console.warn(`SDK no encontrado en intento ${++sdkAttempts}`);
+    return null;
   } catch (e) {
-    console.error('No se pudo obtener SDK de Farcaster desde window:', e);
+    console.error('Error buscando SDK de Farcaster:', e);
+    return null;
   }
-}
+};
+
+// Realizar un intento inicial
+getSdk();
 
 interface DirectWarpcastAuthProps {
   onAuthSuccess?: (user: User) => void;
@@ -41,59 +58,148 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
   const [isInWarpcast, setIsInWarpcast] = useState(false);
   const autoSignInAttempted = useRef(false);
   const [sdkReady, setSdkReady] = useState(false);
+  const [detectionAttempts, setDetectionAttempts] = useState(0);
+  
+  // Crear usuario genérico cuando no hay otra opción
+  const createEmergencyUser = useCallback(() => {
+    try {
+      console.log('Creando usuario genérico de emergencia para Warpcast');
+      
+      // Intentar extraer alguna información útil
+      let existingData = {};
+      try {
+        // Revisar localStorage por cualquier información útil
+        const storedData = localStorage.getItem('farcaster_user') || 
+                         localStorage.getItem('warpcast_user') || 
+                         localStorage.getItem('warpcast_generic_user');
+        
+        if (storedData) {
+          existingData = JSON.parse(storedData);
+          console.log('Datos encontrados en localStorage:', existingData);
+        }
+      } catch (e) {
+        console.warn('Error leyendo localStorage:', e);
+      }
+      
+      // Generar ID único para este usuario
+      const timestamp = Date.now();
+      const tempId = `farcaster-emergency-${timestamp}`;
+      const tempAddr = `0x${timestamp.toString(16).padStart(40, '0')}`;
+      
+      // Usar información existente o valores por defecto
+      const genericUser: User = {
+        id: (existingData as any)?.id || tempId,
+        username: (existingData as any)?.username || 'Warpcast User',
+        walletAddress: (existingData as any)?.walletAddress || tempAddr,
+        fid: (existingData as any)?.fid || 0,
+        isFarcasterUser: true,
+        verifiedWallet: false,
+        chainId: 10 // Optimism por defecto
+      };
+      
+      console.log('Usuario de emergencia para Warpcast creado:', genericUser);
+      
+      // Guardar en localStorage para uso futuro
+      try {
+        localStorage.setItem('warpcast_generic_user', JSON.stringify(genericUser));
+      } catch (e) {
+        console.warn('Error guardando usuario genérico en localStorage:', e);
+      }
+      
+      onAuthSuccess?.(genericUser);
+      setIsLoading(false);
+      setError(null);
+    } catch (e) {
+      console.error('Error creando usuario genérico de emergencia:', e);
+      setError('Error creando usuario para Warpcast');
+    }
+  }, [onAuthSuccess]);
   
   // Detectar si estamos en Warpcast con métodos mejorados
   useEffect(() => {
     const detectWarpcast = async () => {
       try {
-        // Verificar si estamos en un iframe
-        const inIframe = window !== window.parent;
+        // Intentar obtener SDK nuevamente
+        const currentSdk = getSdk();
         
-        // Verificar URL o referrer
+        // Métodos directos de detección
+        const inIframe = window !== window.parent;
         const isWarpcastDomain = 
           window.location.hostname.includes('warpcast') || 
           window.location.href.includes('warpcast.com') ||
           (document.referrer && document.referrer.includes('warpcast'));
         
-        // Buscar señales de Frame en window
+        // Buscar señales de Frame en window - AMPLIADO
         const hasFrameGlobals = !!(
           window.Farcaster || 
           window.frameWarpcast || 
           window.warpcast || 
           (window as any).fc_frame ||
-          document.querySelector('meta[property="fc:frame"]')
+          (window as any).fcFrame ||
+          (window as any).frame ||
+          (window as any)._farcaster ||
+          document.querySelector('meta[property="fc:frame"]') ||
+          document.querySelector('meta[property="fc:frame:image"]') ||
+          document.querySelector('meta[name="fc:frame"]')
         );
         
-        // Verificar SDK de Frame
-        let isFrameApi = false;
-        if (sdk) {
-          try {
-            isFrameApi = await Promise.race([
-              sdk.isFrameAvailable(),
-              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1000))
-            ]);
-          } catch (e) {
-            console.error('Error verificando Frame API:', e);
-          }
-        }
+        // Verificar si hay un tema oscuro - común en aplicaciones móviles
+        const hasDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         
-        const isWarpcast = inIframe || isWarpcastDomain || isFrameApi || hasFrameGlobals;
-        setIsInWarpcast(isWarpcast);
+        // Verificar el UserAgent para detectar características de dispositivos móviles
+        const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         
-        console.log('Detección mejorada Warpcast:', { 
+        // URL o hash params específicos
+        const hasWarpcastParams = 
+          window.location.search.includes('warpcast') || 
+          window.location.hash.includes('warpcast') ||
+          window.location.search.includes('fid=');
+        
+        // Determinar si estamos en Warpcast
+        const isWarpcast = inIframe || isWarpcastDomain || !!currentSdk || hasFrameGlobals || 
+                         (isMobileDevice && (hasDarkMode || hasWarpcastParams));
+                         
+        // Actualizar intentos de detección
+        setDetectionAttempts(prev => prev + 1);
+        
+        console.log('Detección mejorada Warpcast (intento ' + detectionAttempts + '):', { 
           inIframe, 
           isWarpcastDomain, 
-          isFrameApi, 
           hasFrameGlobals,
+          isMobileDevice,
+          hasDarkMode,
+          hasWarpcastParams,
           isWarpcast,
-          sdk: !!sdk
+          sdk: !!currentSdk
         });
         
+        setIsInWarpcast(isWarpcast);
+        
+        // Si no es Warpcast después de 3 intentos, detener
+        if (!isWarpcast && detectionAttempts >= 3) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Si ya intentamos 3 veces y estamos en Warpcast, pero sin SDK
+        if (isWarpcast && detectionAttempts >= 3 && !currentSdk) {
+          console.log('SDK no disponible después de múltiples intentos. Creando usuario genérico de emergencia.');
+          createEmergencyUser();
+          return;
+        }
+        
+        // Si detectamos warpcast pero sin SDK, programar otro intento
+        if (isWarpcast && !currentSdk && detectionAttempts < 3) {
+          console.log(`SDK no disponible en intento ${detectionAttempts}. Intentando de nuevo en 500ms...`);
+          setTimeout(() => detectWarpcast(), 500);
+          return;
+        }
+        
         // Inicializar SDK si está disponible
-        if (sdk && isWarpcast) {
+        if (currentSdk && isWarpcast) {
           try {
             await Promise.race([
-              sdk.actions.ready(),
+              currentSdk.actions.ready(),
               new Promise((_, reject) => setTimeout(() => reject('timeout'), 2000))
             ]);
             console.log('SDK Farcaster inicializado correctamente');
@@ -111,62 +217,35 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
             // Si hay error pero estamos en Warpcast, crear usuario genérico
             if (isWarpcast) {
               console.log('Creando usuario genérico después de error SDK');
-              createGenericUser();
+              createEmergencyUser();
             } else {
               setError('Error al inicializar SDK de Farcaster');
               onAuthFailure?.('Error al inicializar SDK de Farcaster');
             }
           }
-        } else if (isWarpcast && !sdk) {
+        } else if (isWarpcast && !currentSdk) {
           // Si estamos en Warpcast pero no hay SDK, crear usuario genérico
           console.log('En Warpcast pero sin SDK disponible, creando usuario genérico');
-          createGenericUser();
+          createEmergencyUser();
         }
       } catch (e) {
         console.error('Error en detección de Warpcast:', e);
         // Si hay error pero la detección indicó Warpcast, crear usuario genérico
         if (isInWarpcast) {
-          createGenericUser();
+          createEmergencyUser();
         }
       }
     };
     
     detectWarpcast();
-  }, [autoSignIn, onAuthFailure]);
-  
-  // Función para crear un usuario genérico cuando estamos en Warpcast pero sin datos completos
-  const createGenericUser = useCallback(() => {
-    try {
-      console.log('Creando usuario genérico para Warpcast');
-      
-      // Generar ID y dirección únicos
-      const tempId = `farcaster-warpcast-${Date.now()}`;
-      const tempAddr = `0x${tempId.substring(tempId.length - 40)}`;
-      
-      const genericUser: User = {
-        id: tempId,
-        username: 'Warpcast User',
-        walletAddress: tempAddr,
-        fid: 0,
-        isFarcasterUser: true,
-        verifiedWallet: false,
-        chainId: 10 // Optimism
-      };
-      
-      console.log('Usuario genérico creado:', genericUser);
-      onAuthSuccess?.(genericUser);
-      setIsLoading(false);
-      setError(null);
-    } catch (e) {
-      console.error('Error creando usuario genérico:', e);
-      setError('Error creando usuario para Warpcast');
-    }
-  }, [onAuthSuccess]);
+  }, [detectionAttempts, autoSignIn, onAuthFailure, isInWarpcast, createEmergencyUser]);
   
   // Función para iniciar sesión
   const signIn = useCallback(async () => {
     try {
-      if (!sdk && !isInWarpcast) {
+      const currentSdk = getSdk();
+      
+      if (!currentSdk && !isInWarpcast) {
         const errorMsg = 'SDK de Farcaster no disponible';
         setError(errorMsg);
         onAuthFailure?.(errorMsg);
@@ -177,9 +256,9 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
       setError(null);
       
       // Si no hay SDK pero estamos en Warpcast, usar usuario genérico
-      if (!sdk && isInWarpcast) {
+      if (!currentSdk && isInWarpcast) {
         console.log('Sin SDK pero en Warpcast, creando usuario genérico');
-        createGenericUser();
+        createEmergencyUser();
         return;
       }
       
@@ -188,7 +267,7 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
       // Intentar obtener usuario actual primero
       try {
         const currentUser = await Promise.race([
-          sdk.getUser(),
+          currentSdk.getUser(),
           new Promise((_, reject) => setTimeout(() => reject('timeout'), 2000))
         ]);
         
@@ -215,7 +294,7 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
         console.warn('Error o timeout obteniendo usuario actual:', err);
         // Si hay timeout pero estamos en Warpcast, crear usuario genérico
         if (isInWarpcast) {
-          createGenericUser();
+          createEmergencyUser();
           return;
         }
       }
@@ -225,12 +304,12 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
       
       try {
         await Promise.race([
-          sdk.actions.signIn(),
+          currentSdk.actions.signIn(),
           new Promise((_, reject) => setTimeout(() => reject('timeout'), 3000))
         ]);
         
         // Verificar usuario después de sign-in
-        const newUser = await sdk.getUser();
+        const newUser = await currentSdk.getUser();
         
         if (newUser && newUser.fid) {
           console.log('Usuario obtenido después de sign-in:', newUser);
@@ -253,7 +332,7 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
         } else if (isInWarpcast) {
           // Si no hay usuario después del sign-in pero estamos en Warpcast, crear genérico
           console.log('Sign-in exitoso pero sin datos de usuario, creando genérico');
-          createGenericUser();
+          createEmergencyUser();
         } else {
           const errorMsg = 'No se pudo obtener información del usuario después de iniciar sesión';
           setError(errorMsg);
@@ -267,7 +346,7 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
         // Si hay error pero estamos en Warpcast, crear usuario genérico
         if (isInWarpcast) {
           console.log('Error en sign-in pero en Warpcast, creando usuario genérico');
-          createGenericUser();
+          createEmergencyUser();
         } else {
           const errorMsg = signInError instanceof Error ? signInError.message : 'Error desconocido';
           setError(errorMsg);
@@ -283,7 +362,7 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
       // Si hay error global pero estamos en Warpcast, crear usuario genérico
       if (isInWarpcast) {
         console.log('Error global pero en Warpcast, creando usuario genérico');
-        createGenericUser();
+        createEmergencyUser();
       } else {
         setError(errorMsg);
         onAuthFailure?.(errorMsg);
@@ -291,14 +370,25 @@ export const DirectWarpcastAuth: React.FC<DirectWarpcastAuthProps> = ({
         setIsLoading(false);
       }
     }
-  }, [onAuthSuccess, onAuthFailure, isInWarpcast, createGenericUser]);
+  }, [onAuthSuccess, onAuthFailure, isInWarpcast, createEmergencyUser]);
   
-  // Si no estamos en Warpcast, no mostrar nada o un estado alternativo
-  if (!isInWarpcast) {
+  // Si no estamos en Warpcast después de múltiples intentos, mostrar mensaje
+  if (!isInWarpcast && detectionAttempts >= 3) {
     return (
       <div className="text-center p-2 bg-gray-100 rounded-lg border border-gray-200">
         <p className="text-sm text-gray-700">
           Este botón es para usuarios de Warpcast.
+        </p>
+      </div>
+    );
+  }
+  
+  // Mientras estamos detectando, mostrar estado de carga
+  if (detectionAttempts < 3 && !isInWarpcast) {
+    return (
+      <div className="text-center p-2 bg-blue-100 rounded-lg border border-blue-200">
+        <p className="text-sm text-blue-700">
+          Detectando entorno Warpcast...
         </p>
       </div>
     );
