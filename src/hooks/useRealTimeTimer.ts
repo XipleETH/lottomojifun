@@ -1,50 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { subscribeToGameState } from '../firebase/gameServer';
-import { ethers } from 'ethers';
-import LottoMojiFunABI from '../contracts/LottoMojiFunABI.json';
-
-// Dirección del contrato desplegado en Base
-const LOTTO_CONTRACT_ADDRESS = '0x...'; // Reemplazar con la dirección real del contrato
 
 export function useRealTimeTimer(onTimeEnd: () => void) {
-  const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutos por defecto
+  const [timeRemaining, setTimeRemaining] = useState(60);
   const timerRef = useRef<NodeJS.Timeout>();
-  const lastDrawRef = useRef<number>(-1);
+  const lastMinuteRef = useRef<number>(-1);
   const processingRef = useRef<boolean>(false);
   const lastProcessedTimeRef = useRef<number>(0);
   const lastDrawTimeRef = useRef<number>(0);
-  
-  // Función para obtener el tiempo restante del contrato
-  const getContractTimeRemaining = async () => {
-    try {
-      // Solo intentar conectar con el contrato si hay un proveedor disponible
-      if (typeof window.ethereum !== 'undefined') {
-        const provider = new ethers.providers.Web3Provider(window.ethereum as any);
-        const contract = new ethers.Contract(LOTTO_CONTRACT_ADDRESS, LottoMojiFunABI, provider);
-        
-        // Llamar a la función getNextDrawInfo del contrato
-        const nextDrawInfo = await contract.getNextDrawInfo();
-        
-        // nextDrawInfo[2] contiene el tiempo restante en segundos
-        const remaining = nextDrawInfo[2].toNumber();
-        return remaining;
-      }
-      return null;
-    } catch (error) {
-      console.error('[useRealTimeTimer] Error obteniendo tiempo del contrato:', error);
-      return null;
-    }
-  };
 
   useEffect(() => {
-    console.log('[useRealTimeTimer] Inicializando temporizador en tiempo real para sorteos cada 10 minutos');
-    
-    // Intentar obtener el tiempo del contrato inicialmente
-    getContractTimeRemaining().then(remaining => {
-      if (remaining !== null) {
-        setTimeRemaining(remaining);
-      }
-    });
+    console.log('[useRealTimeTimer] Inicializando temporizador en tiempo real');
     
     // Suscribirse a los cambios de estado del juego desde Firebase
     const unsubscribe = subscribeToGameState((nextDrawTime, winningNumbers) => {
@@ -61,26 +27,26 @@ export function useRealTimeTimer(onTimeEnd: () => void) {
       if (nextDrawTime !== lastDrawTimeRef.current) {
         lastDrawTimeRef.current = nextDrawTime;
         
-        // Calcular el número de sorteo actual (basado en intervalos de 10 minutos)
-        const currentDrawNumber = Math.floor(now / (10 * 60 * 1000));
+        // Detectar cambio de minuto para notificar al componente padre
+        const currentMinute = new Date().getMinutes();
         const currentTime = now;
         
         // Solo procesar si:
-        // 1. El tiempo restante es 0 o muy cercano a 0
-        // 2. El número de sorteo actual es diferente al último procesado
+        // 1. El tiempo restante es 0
+        // 2. El minuto actual es diferente al último procesado
         // 3. No estamos ya procesando un evento
         // 4. Han pasado al menos 30 segundos desde el último procesamiento
         if (
-          remaining <= 5 && 
-          currentDrawNumber !== lastDrawRef.current && 
+          remaining === 0 && 
+          currentMinute !== lastMinuteRef.current && 
           !processingRef.current &&
           (currentTime - lastProcessedTimeRef.current) > 30000
         ) {
-          lastDrawRef.current = currentDrawNumber;
+          lastMinuteRef.current = currentMinute;
           processingRef.current = true;
           lastProcessedTimeRef.current = currentTime;
           
-          console.log(`[useRealTimeTimer] [${new Date().toLocaleTimeString()}] Detectado nuevo sorteo, notificando fin de temporizador`);
+          console.log(`[useRealTimeTimer] [${new Date().toLocaleTimeString()}] Detectado cambio de minuto, notificando fin de temporizador`);
           
           // Añadir un pequeño retraso para evitar múltiples llamadas
           setTimeout(() => {
@@ -93,25 +59,13 @@ export function useRealTimeTimer(onTimeEnd: () => void) {
     });
     
     // Actualizar el tiempo restante cada segundo para mantener la UI actualizada
-    // y consultar el contrato cada 30 segundos
     timerRef.current = setInterval(() => {
-      // Decrementar el contador local
       setTimeRemaining(prev => {
         if (prev > 0) {
           return prev - 1;
         }
         return 0;
       });
-      
-      // Cada 30 segundos, sincronizar con el contrato
-      const now = Date.now();
-      if (now % 30000 < 1000) {
-        getContractTimeRemaining().then(remaining => {
-          if (remaining !== null) {
-            setTimeRemaining(remaining);
-          }
-        });
-      }
     }, 1000);
 
     return () => {
