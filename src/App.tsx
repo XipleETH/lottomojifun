@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Timer } from './components/Timer';
 import { Ticket as TicketComponent } from './components/Ticket';
 import { TicketGenerator } from './components/TicketGenerator';
@@ -9,7 +9,6 @@ import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from './components/AuthProvider';
-import { initializeGameState } from './firebase/gameServer';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
 
@@ -20,18 +19,46 @@ function App() {
   const viewProfile = useViewProfile();
   const { user, isLoading, isFarcasterAvailable, signIn } = useAuth();
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const hasTriedSignIn = useRef(false);
+  
+  // Para evitar renderizado constante
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
-  // Inicializar Firebase y SDK
+  // Inicializar Firebase y SDK una sola vez
   useEffect(() => {
-    sdk.actions.ready();
+    const initSDK = async () => {
+      try {
+        await sdk.actions.ready();
+        console.log("SDK inicializado correctamente");
+      } catch (error) {
+        console.error("Error inicializando SDK:", error);
+      }
+    };
+    
+    initSDK();
   }, []);
 
-  // Mostrar notificación cuando hay ganadores
+  // Intentar inicio de sesión automático si no hay usuario
   useEffect(() => {
-    handleWin();
-  }, [gameState.lastResults]);
+    // Solo intentamos una vez y cuando no estamos cargando ya
+    if (!user && !isLoading && !hasTriedSignIn.current) {
+      console.log("Intentando inicio de sesión automático");
+      hasTriedSignIn.current = true;
+      signIn().catch(err => console.error("Error en inicio de sesión automático:", err));
+    }
+    
+    // Marcar como carga inicial completada después de un tiempo
+    if (!initialLoadComplete) {
+      const timer = setTimeout(() => {
+        setInitialLoadComplete(true);
+      }, 2500); // Dar 2.5 segundos para la carga inicial
+      
+      return () => clearTimeout(timer);
+    }
+  }, [user, isLoading, signIn, initialLoadComplete]);
 
-  const handleWin = async () => {
+  // Mostrar notificación cuando hay ganadores
+  const handleWin = useCallback(async () => {
     // Usar verificación de seguridad para evitar errores undefined
     const firstPrizeLength = gameState.lastResults?.firstPrize?.length || 0;
     if (firstPrizeLength > 0) {
@@ -44,18 +71,26 @@ function App() {
         console.error('Failed to send notification:', error);
       }
     }
-  };
+  }, [gameState.lastResults, sendNotification]);
 
-  if (isLoading) {
+  useEffect(() => {
+    handleWin();
+  }, [gameState.lastResults, handleWin]);
+
+  // Pantalla de carga con animación
+  if (isLoading && !initialLoadComplete) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-        <div className="text-white text-2xl">Cargando...</div>
+        <div className="text-center">
+          <div className="animate-bounce text-6xl mb-4">🎲</div>
+          <div className="text-white text-2xl">Cargando LottoMoji...</div>
+        </div>
       </div>
     );
   }
 
   // Si el usuario no está autenticado con Farcaster, mostrar mensaje de error
-  if (!user?.isFarcasterUser && isFarcasterAvailable) {
+  if (!user?.isFarcasterUser && isFarcasterAvailable && initialLoadComplete) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
@@ -75,23 +110,6 @@ function App() {
       </div>
     );
   }
-
-  // Comentamos esta condición para que el juego funcione dentro de Warpcast
-  // Si Farcaster no está disponible (no estamos en el entorno de Farcaster)
-  /* if (!isFarcasterAvailable) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
-        <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
-          <h1 className="text-4xl font-bold text-white mb-4">🎰 LottoMoji 🎲</h1>
-          <p className="text-white text-xl mb-6">Exclusivo para Farcaster</p>
-          <p className="text-white/80 mb-6">
-            Esta aplicación solo está disponible dentro de Farcaster Warpcast. 
-            Visítanos desde la aplicación de Farcaster para jugar.
-          </p>
-        </div>
-      </div>
-    );
-  } */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500">
@@ -113,7 +131,7 @@ function App() {
                 )}
               </div>
             )}
-            {context?.client.added && (
+            {context?.client?.added && (
               <button
                 onClick={() => viewProfile()}
                 className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
@@ -172,10 +190,10 @@ function App() {
               key={ticket.id}
               ticket={ticket}
               isWinner={
-                gameState.lastResults?.firstPrize?.includes(ticket) ? 'first' :
-                gameState.lastResults?.secondPrize?.includes(ticket) ? 'second' :
-                gameState.lastResults?.thirdPrize?.includes(ticket) ? 'third' : 
-                gameState.lastResults?.freePrize?.includes(ticket) ? 'free' : null
+                gameState.lastResults?.firstPrize?.some(t => t.id === ticket.id) ? 'first' :
+                gameState.lastResults?.secondPrize?.some(t => t.id === ticket.id) ? 'second' :
+                gameState.lastResults?.thirdPrize?.some(t => t.id === ticket.id) ? 'third' : 
+                gameState.lastResults?.freePrize?.some(t => t.id === ticket.id) ? 'free' : null
               }
             />
           ))}

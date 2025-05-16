@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { User } from '../types';
 import { onAuthStateChanged, signInWithFarcaster } from '../firebase/auth';
 import { useFarcasterWallet } from '../hooks/useFarcasterWallet';
@@ -24,6 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFarcasterAvailable, setIsFarcasterAvailable] = useState(false);
+  const [authAttempted, setAuthAttempted] = useState(false);
   
   // Usar nuestro hook personalizado de Farcaster
   const { 
@@ -39,15 +40,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Forzar fin de carga después de un tiempo máximo
   useEffect(() => {
+    if (!authAttempted) return;
+    
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.log("Tiempo máximo de carga alcanzado");
+        console.log("Tiempo máximo de carga alcanzado, finalizando estado de carga");
         setIsLoading(false);
       }
-    }, 5000); // 5 segundos máximo de carga
+    }, 3000); // 3 segundos máximo de carga
     
     return () => clearTimeout(timeout);
-  }, [isLoading]);
+  }, [isLoading, authAttempted]);
 
   // Actualizar el estado cuando cambia el usuario de Farcaster
   useEffect(() => {
@@ -55,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("Estableciendo usuario de Farcaster desde MiniKitAuth:", farcasterUser);
       setUser(farcasterUser);
       setIsLoading(false);
+      setAuthAttempted(true);
     }
   }, [farcasterUser]);
 
@@ -63,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsFarcasterAvailable(isWarpcastApp);
   }, [isWarpcastApp]);
 
+  // Crear usuario de Farcaster desde datos de billetera
   useEffect(() => {
     // Si tenemos información de la billetera de Farcaster pero no un usuario completo,
     // crear uno basado en esos datos
@@ -85,110 +90,123 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUser(newUser);
       setIsLoading(false);
+      setAuthAttempted(true);
     }
   }, [isFarcasterConnected, farcasterAddress, farcasterFid, farcasterUsername, user]);
 
+  // Verificar autenticación una sola vez al inicio
   useEffect(() => {
-    // Intentar obtener usuario de autenticación
-    const unsubscribe = onAuthStateChanged((authUser) => {
+    if (authAttempted) return;
+    
+    let isMounted = true;
+    setIsLoading(true);
+    
+    const checkAuth = async () => {
       try {
-        // Solo actualizar si no tenemos un usuario de Farcaster
-        if (!farcasterUser && !isFarcasterConnected) {
-          if (authUser?.isFarcasterUser) {
-            console.log("Estableciendo usuario desde onAuthStateChanged:", authUser);
-            setUser(authUser);
-          } else {
-            console.log("No se detectó usuario de Farcaster");
-            // No establecemos usuario si no hay usuario real
-            setUser(null);
+        // Si ya tenemos un usuario de Farcaster, no hacer nada más
+        if (farcasterUser || (isFarcasterConnected && farcasterAddress)) {
+          return;
+        }
+        
+        console.log("Verificando autenticación inicial...");
+        const result = await new Promise<User | null>((resolve) => {
+          onAuthStateChanged((authUser) => {
+            if (authUser?.isFarcasterUser) {
+              console.log("Usuario de Farcaster encontrado:", authUser);
+              resolve(authUser);
+            } else {
+              console.log("No se encontró usuario de Farcaster");
+              resolve(null);
+            }
+          });
+        });
+        
+        if (isMounted) {
+          if (result) {
+            setUser(result);
           }
+          setIsLoading(false);
+          setAuthAttempted(true);
         }
       } catch (error) {
-        console.error("Error en onAuthStateChanged:", error);
-        setUser(null);
-      } finally {
-        // Siempre terminar la carga
-        setIsLoading(false);
+        console.error("Error en verificación de autenticación:", error);
+        if (isMounted) {
+          setIsLoading(false);
+          setAuthAttempted(true);
+        }
       }
-    });
+    };
+    
+    checkAuth();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [farcasterUser, isFarcasterConnected, farcasterAddress, authAttempted]);
 
-    return () => unsubscribe();
-  }, [farcasterUser, isFarcasterConnected]);
-
-  const signIn = async () => {
+  // Función optimizada de inicio de sesión
+  const signIn = useCallback(async () => {
+    if (user) return;
+    
     try {
       setIsLoading(true);
+      setAuthAttempted(true);
       
-      // Establecer un tiempo máximo para el proceso de inicio de sesión
-      const timeoutPromise = new Promise<void>((resolve) => {
-        setTimeout(() => {
-          console.log("Tiempo de espera de inicio de sesión agotado");
-          resolve();
-        }, 5000); // 5 segundos máximo
-      });
+      console.log("Iniciando proceso de autenticación...");
       
-      // Intentar primero con Farcaster
-      // Prioridad: 1. MiniKit Farcaster, 2. Billetera Farcaster
+      // Si ya tenemos usuario de Farcaster, usarlo
       if (farcasterUser) {
-        console.log("Iniciando sesión con usuario de MiniKit:", farcasterUser);
+        console.log("Ya tenemos usuario de Farcaster, usándolo");
         setUser(farcasterUser);
+        setIsLoading(false);
         return;
       }
       
-      // Crear una promesa para el proceso de autenticación
-      const authPromise = (async () => {
-        if (!isFarcasterConnected) {
-          console.log("Intentando conectar billetera Farcaster");
-          try {
-            await connectFarcasterWallet();
-            console.log("Conexión con billetera Farcaster exitosa");
-            // El efecto se encargará de actualizar el usuario
-            return;
-          } catch (error) {
-            console.error('Error intentando conectar billetera Farcaster:', error);
-          }
-        }
-        
-        // Intentar con API directa de Farcaster (esto puede no funcionar fuera de Warpcast)
+      // Intentar conectar billetera de Farcaster
+      if (!isFarcasterConnected && connectFarcasterWallet) {
+        console.log("Conectando billetera Farcaster...");
         try {
-          console.log("Intentando autenticar con API de Farcaster");
-          const farcasterAuthUser = await signInWithFarcaster();
-          if (farcasterAuthUser) {
-            console.log("Autenticación con Farcaster exitosa:", farcasterAuthUser);
-            setUser(farcasterAuthUser);
+          await connectFarcasterWallet();
+          // Dar tiempo para que se actualicen los estados
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          if (isFarcasterConnected && farcasterAddress && farcasterFid) {
+            console.log("Billetera conectada con éxito");
+            // Los efectos se encargarán de actualizar el usuario
             return;
-          } else {
-            console.log("No se pudo autenticar con Farcaster");
           }
         } catch (error) {
-          console.error("Error en autenticación con Farcaster:", error);
+          console.error("Error conectando billetera:", error);
         }
-      })();
+      }
       
-      // Usar la que termine primero: autenticación o timeout
-      await Promise.race([authPromise, timeoutPromise]);
-      
+      // Último intento: API directa de Farcaster
+      try {
+        console.log("Intentando API directa de Farcaster");
+        const farcasterAuthUser = await signInWithFarcaster();
+        if (farcasterAuthUser) {
+          console.log("Autenticación exitosa con API de Farcaster");
+          setUser(farcasterAuthUser);
+        } else {
+          console.log("Autenticación fallida con API de Farcaster");
+        }
+      } catch (error) {
+        console.error("Error final en autenticación:", error);
+      }
     } catch (error) {
-      console.error('Error en inicio de sesión:', error);
+      console.error("Error general en signIn:", error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Auto sign-in if no user
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!user && !isLoading) {
-        console.log("Intentando auto-login");
-        signIn();
-      }
-    }, 1000); // Esperar 1 segundo para dar tiempo a que se inicialice todo
-    
-    return () => clearTimeout(timeout);
-  }, [user, isLoading]);
+  }, [user, farcasterUser, isFarcasterConnected, farcasterAddress, farcasterFid, connectFarcasterWallet]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, isFarcasterAvailable }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isLoading: isLoading && authAttempted, // Solo mostrar carga si realmente intentamos autenticar
+      signIn, 
+      isFarcasterAvailable 
+    }}>
       {children}
     </AuthContext.Provider>
   );
