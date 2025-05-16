@@ -82,4 +82,37 @@ declare module "@farcaster/frame-sdk" {
   }
 
   export const sdk: FrameSDK;
+}
+
+// Extender interfaz Window para la integración con Farcaster
+declare global {
+  interface Window {
+    Farcaster?: {
+      sdk?: {
+        getUser: () => Promise<FarcasterUser | null>;
+        isFrameAvailable: () => Promise<boolean>;
+        actions: {
+          ready: () => Promise<void>;
+          signIn: () => Promise<void>;
+        };
+        signer?: {
+          signMessage?: (message: string) => Promise<string>;
+        };
+      };
+    };
+    frameWarpcast?: {
+      sdk?: {
+        getUser: () => Promise<FarcasterUser | null>;
+        isFrameAvailable: () => Promise<boolean>;
+        actions: {
+          ready: () => Promise<void>;
+          signIn: () => Promise<void>;
+        };
+        signer?: {
+          signMessage?: (message: string) => Promise<string>;
+        };
+      };
+    };
+    ethereum?: any;
+  }
 } 

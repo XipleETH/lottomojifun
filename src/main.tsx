@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from './components/AuthProvider';
 import { MiniKitProvider } from './providers/MiniKitProvider';
+import { WarpcastProvider } from './providers/WarpcastProvider';
 import { initializeGameState } from './firebase/gameServer';
 
 // Configuración de redes blockchain
@@ -25,10 +26,12 @@ console.log('Inicializando aplicación con soporte para Base y Optimism');
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <MiniKitProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </MiniKitProvider>
+    <WarpcastProvider>
+      <MiniKitProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </MiniKitProvider>
+    </WarpcastProvider>
   </React.StrictMode>,
 );

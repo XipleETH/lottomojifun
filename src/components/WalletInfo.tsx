@@ -4,13 +4,15 @@ import { useWallet } from '../hooks/useWallet';
 import { useAuth } from './AuthProvider';
 import { useFarcasterWallet } from '../hooks/useFarcasterWallet';
 import { useMiniKitAuth } from '../providers/MiniKitProvider';
+import { useWarpcast } from '../providers/WarpcastProvider';
 
 // Constantes de red
 const BASE_CHAIN_ID = 8453;
 const OPTIMISM_CHAIN_ID = 10;
 
 export const WalletInfo: React.FC = () => {
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
+  const { user: warpcastUser, isWarpcastApp } = useWarpcast();
   const { 
     isConnected: isWalletConnected, 
     isConnecting: isWalletConnecting, 
@@ -37,16 +39,19 @@ export const WalletInfo: React.FC = () => {
   } = useFarcasterWallet();
   
   // Información del context de MiniKit
-  const { farcasterUser, isWarpcastApp } = useMiniKitAuth();
+  const { farcasterUser } = useMiniKitAuth();
   
   const [isExpanded, setIsExpanded] = useState(false);
   const [isChangingNetwork, setIsChangingNetwork] = useState(false);
+  
+  // Usar el usuario de Warpcast primero, si está disponible
+  const user = warpcastUser || authUser;
   
   // Determinar la información de billetera a mostrar (priorizando Farcaster)
   const walletAddress = farcasterAddress || user?.walletAddress;
   const fid = farcasterFid || user?.fid;
   const username = farcasterUsername || user?.username;
-  const isConnected = isFarcasterConnected || isWalletConnected;
+  const isConnected = isFarcasterConnected || isWalletConnected || !!user?.walletAddress;
   const isConnecting = isFarcasterConnecting || isWalletConnecting;
   
   // Función para cambiar a la red Base
@@ -248,26 +253,13 @@ export const WalletInfo: React.FC = () => {
               
               {lastTransaction && (
                 <div className="bg-white/5 p-3 rounded">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white/70">Última Tx</span>
-                    <a 
-                      href={`https://${isBaseNetwork ? 'basescan.org' : 'optimistic.etherscan.io'}/tx/${lastTransaction}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-mono text-indigo-300 hover:text-indigo-200 truncate max-w-[200px]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {lastTransaction.substring(0, 10)}...
-                    </a>
+                  <div className="flex items-center mb-2">
+                    <CircleDollarSign size={16} className="mr-2 text-green-400" />
+                    <span>Última Transacción</span>
                   </div>
-                </div>
-              )}
-              
-              {walletAddress && fid && (
-                <div className="bg-white/5 p-3 rounded text-center text-xs">
-                  <span className="text-white/60">
-                    Puedes usar esta billetera para interactuar con contratos en la red {isBaseNetwork ? 'Base' : getNetworkName(currentChainId)}
-                  </span>
+                  <div className="text-sm truncate font-mono bg-white/10 p-2 rounded">
+                    {lastTransaction}
+                  </div>
                 </div>
               )}
             </>

@@ -5,6 +5,8 @@ import { createPlayerTicket, createRandomTicket } from '../utils/ticketHelper';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../components/AuthProvider';
 import { useMiniKitAuth } from '../providers/MiniKitProvider';
+import { useWarpcast } from '../providers/WarpcastProvider';
+import { User } from '../types';
 
 interface TicketGeneratorProps {
   onGenerateTicket: (numbers: string[]) => void;
@@ -21,8 +23,12 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
 }) => {
   const [selectedEmojis, setSelectedEmojis] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user, isLoading: isUserLoading } = useAuth(); // Obtener la información del usuario autenticado
-  const { isWarpcastApp } = useMiniKitAuth(); // Verificar si estamos en Warpcast
+  const { user: authUser, isLoading: authLoading } = useAuth();
+  const { user: warpcastUser, isLoading: warpcastLoading, isWarpcastApp } = useWarpcast();
+  
+  // Determinar el usuario activo (priorizar Warpcast si está disponible)
+  const user = warpcastUser || authUser;
+  const isUserLoading = warpcastLoading || authLoading;
 
   // Reset selected emojis when ticket count changes to 0
   useEffect(() => {

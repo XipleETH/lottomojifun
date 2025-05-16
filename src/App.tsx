@@ -14,15 +14,51 @@ import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
 import { Toaster } from 'react-hot-toast';
 import { WarpcastStatus } from './components/WarpcastStatus';
+import { DirectWarpcastAuth } from './components/DirectWarpcastAuth';
+import { useWarpcast } from './providers/WarpcastProvider';
+import { User } from './types';
 
 function App() {
   const { gameState, generateTicket, forceGameDraw } = useGameState();
   const { context } = useMiniKit();
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
-  const { user, isLoading, isFarcasterAvailable, signIn } = useAuth();
+  const { user: authUser, isLoading: authLoading, isFarcasterAvailable, signIn: authSignIn } = useAuth();
+  const { user: warpcastUser, isLoading: warpcastLoading, isWarpcastApp } = useWarpcast();
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [renderStable, setRenderStable] = useState(false);
+  
+  // Estado local para el usuario (priorizar Warpcast si está disponible)
+  const [activeUser, setActiveUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Gestionar usuario activo
+  useEffect(() => {
+    // Prioridad: warpcastUser > authUser
+    if (warpcastUser) {
+      setActiveUser(warpcastUser);
+      setIsLoading(false);
+    } else if (authUser) {
+      setActiveUser(authUser);
+      setIsLoading(false);
+    } else {
+      // No hay usuario, pero si tenemos isWarpcastApp y no está cargando, consideramos no cargando
+      if (isWarpcastApp && !warpcastLoading) {
+        setIsLoading(false);
+      }
+      // En otros casos, si authLoading = false, consideramos no cargando
+      else if (!authLoading) {
+        setIsLoading(false);
+      }
+    }
+  }, [warpcastUser, authUser, warpcastLoading, authLoading, isWarpcastApp]);
+
+  // Manejador para cuando DirectWarpcastAuth autentique exitosamente
+  const handleDirectAuth = (user: User) => {
+    console.log('Autenticación directa exitosa:', user);
+    setActiveUser(user);
+    setIsLoading(false);
+  };
 
   // Estabilizar el renderizado para evitar parpadeos
   useEffect(() => {
@@ -86,15 +122,24 @@ function App() {
           Para jugar a LottoMoji necesitas iniciar sesión con tu cuenta de Farcaster. 
           Esta aplicación solo está disponible para usuarios de Farcaster Warpcast.
         </p>
-        <button
-          onClick={() => signIn()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-        >
-          Iniciar sesión con Farcaster
-        </button>
+        
+        {/* Mostrar componente de autenticación directa de Warpcast */}
+        <DirectWarpcastAuth 
+          onAuthSuccess={handleDirectAuth}
+          autoSignIn={isWarpcastApp}
+        />
+        
+        {!isWarpcastApp && (
+          <button
+            onClick={() => authSignIn()}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Iniciar sesión con Farcaster
+          </button>
+        )}
       </div>
     </div>
-  ), [signIn]);
+  ), [authSignIn, handleDirectAuth, isWarpcastApp]);
 
   // Si no hemos estabilizado el renderizado, mostrar la página de carga
   if (!renderStable) {
@@ -106,8 +151,8 @@ function App() {
     return loadingPage;
   }
 
-  // Si el usuario no está autenticado con Farcaster, mostrar mensaje de error
-  if (!user?.isFarcasterUser && isFarcasterAvailable) {
+  // Si el usuario no está autenticado con Farcaster, mostrar página de login
+  if (!activeUser?.isFarcasterUser) {
     return loginPage;
   }
 
@@ -119,14 +164,14 @@ function App() {
             🎰 LottoMoji 🎲
           </h1>
           <div className="flex items-center gap-2">
-            {user && (
+            {activeUser && (
               <div className="bg-white/20 px-4 py-2 rounded-lg text-white flex items-center">
                 <UserCircle className="mr-2" size={18} />
-                <span>{user.username}</span>
-                {user.walletAddress && (
+                <span>{activeUser.username}</span>
+                {activeUser.walletAddress && (
                   <div className="ml-2 flex items-center text-sm text-white/70">
                     <WalletIcon size={12} className="mr-1" />
-                    <span>{user.walletAddress.substring(0, 6)}...{user.walletAddress.substring(user.walletAddress.length - 4)}</span>
+                    <span>{activeUser.walletAddress.substring(0, 6)}...{activeUser.walletAddress.substring(activeUser.walletAddress.length - 4)}</span>
                   </div>
                 )}
               </div>
@@ -146,7 +191,7 @@ function App() {
         <WarpcastStatus />
         
         {/* Componente de información de billetera */}
-        {user?.isFarcasterUser && (
+        {activeUser?.isFarcasterUser && (
           <div className="mb-6">
             <WalletInfo />
           </div>
@@ -166,7 +211,7 @@ function App() {
           secondPrize={gameState.lastResults?.secondPrize || []}
           thirdPrize={gameState.lastResults?.thirdPrize || []}
           freePrize={gameState.lastResults?.freePrize || []}
-          currentUserId={user?.id}
+          currentUserId={activeUser?.id}
         />
 
         {import.meta.env.DEV && (
