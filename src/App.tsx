@@ -26,28 +26,63 @@ function App() {
   
   // Para evitar renderizado constante
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  
+  // Modo de compatibilidad para navegadores con problemas
+  const [compatibilityMode, setCompatibilityMode] = useState(false);
+  
+  // Detectar si necesitamos activar el modo de compatibilidad
+  useEffect(() => {
+    // Verificar si hay problemas con APIs críticas
+    const needsCompatibilityMode = 
+      typeof window.ethereum === 'undefined' || 
+      !window.localStorage || 
+      !window.indexedDB;
+    
+    if (needsCompatibilityMode) {
+      console.log('Activando modo de compatibilidad debido a APIs faltantes');
+      setCompatibilityMode(true);
+    }
+    
+    // También activar si detectamos ciertos navegadores problemáticos
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('safari/') && !userAgent.includes('chrome/')) {
+      console.log('Activando modo de compatibilidad para Safari');
+      setCompatibilityMode(true);
+    }
+  }, []);
 
   // Inicializar Firebase y SDK una sola vez
   useEffect(() => {
     const initSDK = async () => {
       try {
+        if (compatibilityMode) {
+          console.log("Modo de compatibilidad: saltando inicialización de SDK");
+          return;
+        }
+        
         await sdk.actions.ready();
         console.log("SDK inicializado correctamente");
       } catch (error) {
         console.error("Error inicializando SDK:", error);
+        // Si hay error al inicializar el SDK, activar modo de compatibilidad
+        setCompatibilityMode(true);
       }
     };
     
     initSDK();
-  }, []);
+  }, [compatibilityMode]);
 
   // Intentar inicio de sesión automático si no hay usuario
   useEffect(() => {
     // Solo intentamos una vez y cuando no estamos cargando ya
-    if (!user && !isLoading && !hasTriedSignIn.current) {
+    if (!user && !isLoading && !hasTriedSignIn.current && !compatibilityMode) {
       console.log("Intentando inicio de sesión automático");
       hasTriedSignIn.current = true;
-      signIn().catch(err => console.error("Error en inicio de sesión automático:", err));
+      signIn().catch(err => {
+        console.error("Error en inicio de sesión automático:", err);
+        // Si hay error de inicio de sesión, activar modo de compatibilidad
+        setCompatibilityMode(true);
+      });
     }
     
     // Marcar como carga inicial completada después de un tiempo
@@ -58,13 +93,13 @@ function App() {
       
       return () => clearTimeout(timer);
     }
-  }, [user, isLoading, signIn, initialLoadComplete]);
+  }, [user, isLoading, signIn, initialLoadComplete, compatibilityMode]);
 
   // Mostrar notificación cuando hay ganadores
   const handleWin = useCallback(async () => {
     // Usar verificación de seguridad para evitar errores undefined
     const firstPrizeLength = gameState.lastResults?.firstPrize?.length || 0;
-    if (firstPrizeLength > 0) {
+    if (firstPrizeLength > 0 && !compatibilityMode) {
       try {
         await sendNotification({
           title: '🎉 You Won!',
@@ -74,7 +109,7 @@ function App() {
         console.error('Failed to send notification:', error);
       }
     }
-  }, [gameState.lastResults, sendNotification]);
+  }, [gameState.lastResults, sendNotification, compatibilityMode]);
 
   useEffect(() => {
     handleWin();
@@ -87,6 +122,77 @@ function App() {
         <div className="text-center">
           <div className="animate-bounce text-6xl mb-4">🎲</div>
           <div className="text-white text-2xl">Cargando LottoMoji...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Si estamos en modo de compatibilidad, mostrar una interfaz simplificada
+  if (compatibilityMode) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 p-4">
+        <div className="container mx-auto px-4 py-8">
+          <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
+            🎰 LottoMoji 🎲
+          </h1>
+          
+          <div className="bg-white/20 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-white mb-4">Modo de compatibilidad</h2>
+            <p className="text-white mb-4">
+              Estamos ejecutando LottoMoji en modo de compatibilidad debido a que tu navegador
+              puede tener limitaciones con algunas características que usamos.
+            </p>
+            <p className="text-white mb-4">
+              Para la mejor experiencia, te recomendamos usar:
+            </p>
+            <ul className="list-disc list-inside text-white mb-4 ml-4">
+              <li>Google Chrome (última versión)</li>
+              <li>Brave Browser</li>
+              <li>Microsoft Edge (basado en Chromium)</li>
+            </ul>
+            <p className="text-white">
+              También puedes visitar nuestra <a href="/diagnostico.html" className="underline font-bold">página de diagnóstico</a> para verificar la conectividad.
+            </p>
+          </div>
+          
+          {/* Mostrar PrizePool en modo compatibilidad */}
+          <div className="mb-6">
+            <PrizePool />
+          </div>
+          
+          {/* Información sobre cómo funciona */}
+          <div className="mt-8 bg-white/10 p-6 rounded-lg">
+            <h2 className="text-white text-xl font-bold mb-4 flex items-center">
+              <Coins className="mr-2" size={20} />
+              ¿Cómo funciona?
+            </h2>
+            <div className="text-white/80 space-y-3">
+              <p>
+                LottoMoji es una lotería de emojis que funciona en la red Base usando tu billetera de Farcaster.
+              </p>
+              <p>
+                1. Cada ticket cuesta 1 USDC y se compra directamente desde tu billetera.
+              </p>
+              <p>
+                2. Selecciona 4 emojis para crear tu ticket y comprarlo.
+              </p>
+              <p>
+                3. El 95% de los fondos van al pozo de premios, mientras que el 5% se destina al desarrollo.
+              </p>
+              <p>
+                4. Premios: 
+                <ul className="list-disc list-inside ml-4 mt-1">
+                  <li>4 emojis iguales: 70% del pozo</li>
+                  <li>3 emojis iguales: 20% del pozo</li>
+                  <li>2 emojis iguales: 10% del pozo</li>
+                  <li>1 emoji igual: Ticket gratis</li>
+                </ul>
+              </p>
+              <p>
+                5. La lotería se sortea diariamente y los premios se envían automáticamente a las billeteras ganadoras.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
