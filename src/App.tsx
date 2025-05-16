@@ -31,7 +31,7 @@ function App() {
   }, [gameState.lastResults]);
 
   const handleWin = async () => {
-    if (gameState.lastResults?.firstPrize.length > 0) {
+    if (gameState.lastResults?.firstPrize?.length > 0) {
       try {
         await sendNotification({
           title: '🎉 You Won!',
@@ -63,7 +63,7 @@ function App() {
             Esta aplicación solo está disponible para usuarios de Farcaster Warpcast.
           </p>
           <button
-            onClick={() => sdk.signIn()}
+            onClick={() => sdk.actions.signIn()}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
             Iniciar sesión con Farcaster
@@ -73,8 +73,9 @@ function App() {
     );
   }
 
+  // Comentamos esta condición para que el juego funcione dentro de Warpcast
   // Si Farcaster no está disponible (no estamos en el entorno de Farcaster)
-  if (!isFarcasterAvailable) {
+  /* if (!isFarcasterAvailable) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500 flex flex-col items-center justify-center p-4">
         <div className="bg-white/20 p-8 rounded-xl max-w-md text-center">
@@ -87,7 +88,7 @@ function App() {
         </div>
       </div>
     );
-  }
+  } */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-500 to-pink-500">
@@ -161,10 +162,10 @@ function App() {
               key={ticket.id}
               ticket={ticket}
               isWinner={
-                gameState.lastResults?.firstPrize.includes(ticket) ? 'first' :
-                gameState.lastResults?.secondPrize.includes(ticket) ? 'second' :
-                gameState.lastResults?.thirdPrize.includes(ticket) ? 'third' : 
-                gameState.lastResults?.freePrize.includes(ticket) ? 'free' : null
+                gameState.lastResults?.firstPrize?.includes(ticket) ? 'first' :
+                gameState.lastResults?.secondPrize?.includes(ticket) ? 'second' :
+                gameState.lastResults?.thirdPrize?.includes(ticket) ? 'third' : 
+                gameState.lastResults?.freePrize?.includes(ticket) ? 'free' : null
               }
             />
           ))}

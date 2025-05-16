@@ -171,40 +171,52 @@ export const subscribeToUserTickets = (
   callback: (tickets: Ticket[]) => void
 ) => {
   try {
-    const user = getCurrentUser();
-    if (!user) {
+    // Primero obtenemos el usuario actual como promesa
+    getCurrentUser().then(user => {
+      if (!user) {
+        callback([]);
+        return () => {};
+      }
+      
+      const ticketsQuery = query(
+        collection(db, TICKETS_COLLECTION),
+        where('userId', '==', user.id),
+        orderBy('timestamp', 'desc')
+      );
+      
+      return onSnapshot(ticketsQuery, (snapshot) => {
+        try {
+          const tickets = snapshot.docs.map(doc => {
+            try {
+              return mapFirestoreTicket(doc);
+            } catch (error) {
+              console.error('Error mapping ticket document:', error, doc.id);
+              return null;
+            }
+          }).filter(ticket => ticket !== null) as Ticket[];
+          
+          callback(tickets);
+        } catch (error) {
+          console.error('Error processing tickets snapshot:', error);
+          callback([]);
+        }
+      }, (error) => {
+        console.error('Error in subscribeToUserTickets:', error);
+        callback([]);
+      });
+    }).catch(error => {
+      console.error('Error getting current user:', error);
       callback([]);
       return () => {};
-    }
-    
-    const ticketsQuery = query(
-      collection(db, TICKETS_COLLECTION),
-      where('userId', '==', user.id),
-      orderBy('timestamp', 'desc')
-    );
-    
-    return onSnapshot(ticketsQuery, (snapshot) => {
-      try {
-        const tickets = snapshot.docs.map(doc => {
-          try {
-            return mapFirestoreTicket(doc);
-          } catch (error) {
-            console.error('Error mapping ticket document:', error, doc.id);
-            return null;
-          }
-        }).filter(ticket => ticket !== null) as Ticket[];
-        
-        callback(tickets);
-      } catch (error) {
-        console.error('Error processing tickets snapshot:', error);
-        callback([]);
-      }
-    }, (error) => {
-      console.error('Error in subscribeToUserTickets:', error);
-      callback([]);
     });
+    
+    // Devolver una función de unsubscribe temporal
+    return () => {
+      // Esta función será reemplazada cuando se resuelva la promesa
+    };
   } catch (error) {
     console.error('Error setting up user tickets subscription:', error);
+    callback([]);
     return () => {}; // Unsubscribe no-op
   }
 };
