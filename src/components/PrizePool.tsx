@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Tool } from 'lucide-react';
+import { Trophy, Wrench } from 'lucide-react';
 import { LottoMojiFun } from '../contracts/LottoMojiFun';
 import { formatUnits } from 'viem';
 
@@ -100,7 +100,7 @@ export const PrizePool: React.FC = () => {
         {/* Fondos para desarrollo */}
         <div>
           <div className="flex items-center mb-1">
-            <Tool size={16} className="text-blue-400 mr-2" />
+            <Wrench size={16} className="text-blue-400 mr-2" />
             <h3 className="text-white/80 text-sm">Fondos para desarrollo (5%)</h3>
           </div>
           <div className="text-white/80 font-medium">
