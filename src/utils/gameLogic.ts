@@ -5,13 +5,26 @@ export const EMOJIS = ['🌟', '🎈', '🎨', '🌈', '🦄', '🍭', '🎪', '
                       '🎁', '🎮', '🚀', '🌍', '🍀'];
 
 export const generateRandomEmojis = (count: number): string[] => {
+  // Asegurarnos de que el conteo solicitado no sea mayor que la cantidad disponible de emojis
+  const actualCount = Math.min(count, EMOJIS.length);
+  
+  // Crear una copia del array de emojis disponibles para poder alterarla
+  const availableEmojis = [...EMOJIS];
   const result: string[] = [];
   
-  for (let i = 0; i < count; i++) {
-    const randomIndex = Math.floor(Math.random() * EMOJIS.length);
-    result.push(EMOJIS[randomIndex]);
+  // Seleccionar 'count' emojis aleatorios sin repetición
+  for (let i = 0; i < actualCount; i++) {
+    // Obtener un índice aleatorio del array disponible (cada vez más pequeño)
+    const randomIndex = Math.floor(Math.random() * availableEmojis.length);
+    
+    // Agregar el emoji seleccionado al resultado
+    result.push(availableEmojis[randomIndex]);
+    
+    // Eliminar el emoji seleccionado para que no se repita
+    availableEmojis.splice(randomIndex, 1);
   }
   
+  console.log('[gameLogic] Generados emojis aleatorios:', result);
   return result;
 };
 

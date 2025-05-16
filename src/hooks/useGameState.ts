@@ -110,16 +110,28 @@ export function useGameState() {
 
   // Función para generar un nuevo ticket
   const generateTicket = useCallback(async (numbers: string[]) => {
-    if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) return;
+    if (!numbers?.length || gameState.tickets.length >= MAX_TICKETS) {
+      console.log('[useGameState] No se puede generar ticket: validaciones fallidas', { 
+        numbersLength: numbers?.length, 
+        currentTickets: gameState.tickets.length, 
+        maxTickets: MAX_TICKETS 
+      });
+      return;
+    }
+    
+    console.log('[useGameState] Generando ticket con números:', numbers);
     
     try {
       // Crear un ticket temporal para mostrar inmediatamente
+      const tempId = 'temp-' + crypto.randomUUID();
       const tempTicket: Ticket = {
-        id: 'temp-' + crypto.randomUUID(),
+        id: tempId,
         numbers,
         timestamp: Date.now(),
         userId: 'temp'
       };
+      
+      console.log('[useGameState] Creando ticket temporal con ID:', tempId);
       
       // Actualizar el estado inmediatamente con el ticket temporal
       setGameState(prev => ({
@@ -127,21 +139,31 @@ export function useGameState() {
         tickets: [...prev.tickets, tempTicket]
       }));
       
-      // Generar el ticket en Firebase
-      const ticket = await import('../firebase/game').then(({ generateTicket: generateFirebaseTicket }) => {
-        return generateFirebaseTicket(numbers);
-      });
+      // Generar el ticket en Firebase (con reintentos internos)
+      console.log('[useGameState] Llamando a Firebase para guardar ticket...');
+      const { generateTicket: generateFirebaseTicket } = await import('../firebase/game');
+      const ticket = await generateFirebaseTicket(numbers);
       
-      if (!ticket) {
+      if (ticket) {
+        console.log('[useGameState] Ticket guardado en Firebase correctamente:', ticket.id);
+      } else {
         // Si hay un error, eliminar el ticket temporal
+        console.error('[useGameState] Error guardando ticket en Firebase');
         setGameState(prev => ({
           ...prev,
-          tickets: prev.tickets.filter(t => t.id !== tempTicket.id)
+          tickets: prev.tickets.filter(t => t.id !== tempId)
         }));
+        
+        // Intentar de nuevo la conexión de Firestore
+        console.log('[useGameState] Intentando reconexión con Firestore...');
+        import('../firebase/initTickets').then(({ ticketsCollectionExists }) => {
+          ticketsCollectionExists().then(exists => {
+            console.log('[useGameState] Estado de la colección de tickets:', exists ? 'Disponible' : 'No disponible');
+          });
+        });
       }
-      
     } catch (error) {
-      console.error('Error generating ticket:', error);
+      console.error('[useGameState] Error generando ticket:', error);
     }
   }, [gameState.tickets.length]);
 

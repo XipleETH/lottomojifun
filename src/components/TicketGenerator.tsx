@@ -41,9 +41,27 @@ export const TicketGenerator: React.FC<TicketGeneratorProps> = ({
   };
 
   const handleRandomGenerate = () => {
-    if (disabled) return;
+    if (disabled) {
+      console.log('[TicketGenerator] Generación de ticket aleatorio deshabilitada');
+      return;
+    }
+    
+    console.log('[TicketGenerator] Generando ticket aleatorio...');
+    
+    // Generar 4 emojis aleatorios únicos
     const randomEmojis = generateRandomEmojis(4);
+    
+    // Enviar al hook para que los guarde en Firebase
+    console.log('[TicketGenerator] Enviando emojis para guardar en Firebase:', randomEmojis);
     onGenerateTicket(randomEmojis);
+    
+    // Feedback visual al usuario (opcional)
+    setSelectedEmojis([...randomEmojis]); // Mostrar brevemente los emojis seleccionados
+    
+    // Limpiar después de un momento para preparar para la próxima selección
+    setTimeout(() => {
+      setSelectedEmojis([]);
+    }, 1000);
   };
 
   return (
