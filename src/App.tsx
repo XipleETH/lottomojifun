@@ -12,6 +12,7 @@ import { useAuth } from './components/AuthProvider';
 import { WinnerAnnouncement } from './components/WinnerAnnouncement';
 import { WalletInfo } from './components/WalletInfo';
 import { PrizePool } from './components/PrizePool';
+import { DiagnosticTool } from './components/DiagnosticTool';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
@@ -247,6 +248,7 @@ function App() {
       </div>
       <GameHistoryButton />
       <EmojiChat />
+      <DiagnosticTool />
     </div>
   );
 }
