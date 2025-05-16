@@ -60,6 +60,15 @@ export const CONTRACT_ADDRESSES = {
   // USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as Address, // USDC en Base Sepolia
 };
 
+// Lista de RPC alternativos para Base
+const BASE_RPC_URLS = [
+  'https://base.publicnode.com',
+  'https://mainnet.base.org',
+  'https://base.llamarpc.com',
+  'https://base.meowrpc.com',
+  'https://1rpc.io/base'
+];
+
 // Tipos para los resultados del contrato
 export interface TicketStruct {
   id: bigint;
@@ -99,30 +108,72 @@ export class LottoMojiFun {
   public contractAddress: Address;
   private usdcAddress: Address;
   public lottoMojiFunAbi = lottoMojiFunAbi;
+  private currentRpcIndex = 0;
   
   constructor(contractAddress: Address = CONTRACT_ADDRESSES.LOTTO_MOJI_FUN, usdcAddress: Address = CONTRACT_ADDRESSES.USDC) {
     this.contractAddress = contractAddress;
     this.usdcAddress = usdcAddress;
     
-    // Cliente público para lectura - usando múltiples RPC para mayor confiabilidad
+    // Inicializar cliente con el primer RPC
+    this.publicClient = this.createPublicClient();
+    
+    // Verificar la conexión inicial
+    this.checkConnection();
+  }
+  
+  // Crear un cliente público con la URL RPC actual
+  private createPublicClient() {
+    const rpcUrl = BASE_RPC_URLS[this.currentRpcIndex];
+    console.log(`Inicializando cliente público para Base con RPC: ${rpcUrl}`);
+    
+    return createPublicClient({
+      chain: base,
+      transport: http(rpcUrl),
+      batch: {
+        multicall: true,
+      },
+    });
+  }
+  
+  // Verificar la conexión y cambiar a otro RPC si es necesario
+  private async checkConnection() {
     try {
-      console.log('Inicializando cliente público para Base con dirección de contrato:', contractAddress);
-      this.publicClient = createPublicClient({
-        chain: base,
-        transport: http('https://base.publicnode.com'),
-        batch: {
-          multicall: true,
-        },
-      });
+      // Intentar obtener el número de bloque para verificar la conexión
+      await this.publicClient.getBlockNumber();
+      console.log(`Conexión exitosa con RPC: ${BASE_RPC_URLS[this.currentRpcIndex]}`);
+      return true;
     } catch (error) {
-      console.error('Error al crear el cliente público:', error);
-      // Fallback a RPC alternativo
-      console.log('Intentando con RPC alternativo...');
-      this.publicClient = createPublicClient({
-        chain: base,
-        transport: http('https://mainnet.base.org'),
-      });
+      console.error(`Error de conexión con RPC ${BASE_RPC_URLS[this.currentRpcIndex]}:`, error);
+      
+      // Intentar con el siguiente RPC
+      this.currentRpcIndex = (this.currentRpcIndex + 1) % BASE_RPC_URLS.length;
+      console.log(`Cambiando a RPC alternativo: ${BASE_RPC_URLS[this.currentRpcIndex]}`);
+      
+      this.publicClient = this.createPublicClient();
+      return false;
     }
+  }
+  
+  // Función para reintentar una operación si falla
+  private async retryOperation<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        console.error(`Intento ${attempt + 1}/${maxRetries} fallido:`, error);
+        
+        // Si no es el último intento, verificar la conexión y esperar
+        if (attempt < maxRetries - 1) {
+          await this.checkConnection();
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+    }
+    
+    throw lastError;
   }
   
   // Configurar cliente de billetera
@@ -136,60 +187,70 @@ export class LottoMojiFun {
    * Obtiene los detalles de un ticket
    */
   public async getTicketDetails(ticketId: bigint): Promise<TicketStruct> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'getTicketDetails',
-      args: [ticketId]
-    }) as Promise<TicketStruct>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'getTicketDetails',
+        args: [ticketId]
+      }) as Promise<TicketStruct>;
+    });
   }
   
   /**
    * Obtiene los detalles de un sorteo
    */
   public async getDrawDetails(drawId: bigint): Promise<DrawResultStruct> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'getDrawDetails',
-      args: [drawId]
-    }) as Promise<DrawResultStruct>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'getDrawDetails',
+        args: [drawId]
+      }) as Promise<DrawResultStruct>;
+    });
   }
   
   /**
    * Obtiene los tickets de un usuario
    */
   public async getUserTickets(userAddress: Address): Promise<bigint[]> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'getUserTickets',
-      args: [userAddress]
-    }) as Promise<bigint[]>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'getUserTickets',
+        args: [userAddress]
+      }) as Promise<bigint[]>;
+    });
   }
   
   /**
    * Obtiene los tickets de un usuario para un sorteo específico
    */
   public async getUserDrawTickets(drawId: bigint, userAddress: Address): Promise<bigint[]> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'getUserDrawTickets',
-      args: [drawId, userAddress]
-    }) as Promise<bigint[]>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'getUserDrawTickets',
+        args: [drawId, userAddress]
+      }) as Promise<bigint[]>;
+    });
   }
   
   /**
    * Comprueba la categoría de premio de un ticket
    */
   public async checkTicketPrizeCategory(ticketId: bigint): Promise<bigint> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'checkTicketPrizeCategory',
-      args: [ticketId]
-    }) as Promise<bigint>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'checkTicketPrizeCategory',
+        args: [ticketId]
+      }) as Promise<bigint>;
+    });
   }
   
   /**
@@ -201,41 +262,47 @@ export class LottoMojiFun {
     thirdWinners: bigint;
     fourthWinners: bigint;
   }> {
-    const result = await this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'getWinnersCount',
-      args: [drawId]
-    }) as [bigint, bigint, bigint, bigint];
-    
-    return {
-      firstWinners: result[0],
-      secondWinners: result[1],
-      thirdWinners: result[2],
-      fourthWinners: result[3]
-    };
+    return this.retryOperation(async () => {
+      const result = await this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'getWinnersCount',
+        args: [drawId]
+      }) as [bigint, bigint, bigint, bigint];
+      
+      return {
+        firstWinners: result[0],
+        secondWinners: result[1],
+        thirdWinners: result[2],
+        fourthWinners: result[3]
+      };
+    });
   }
   
   /**
    * Obtiene el ID del sorteo actual
    */
   public async getCurrentDrawId(): Promise<bigint> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'currentDrawId'
-    }) as Promise<bigint>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'currentDrawId'
+      }) as Promise<bigint>;
+    });
   }
   
   /**
    * Obtiene el saldo de la pool de reserva
    */
   public async getReservePoolBalance(): Promise<bigint> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'getReservePoolBalance'
-    }) as Promise<bigint>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'getReservePoolBalance'
+      }) as Promise<bigint>;
+    });
   }
   
   /**
@@ -249,54 +316,60 @@ export class LottoMojiFun {
     secondPrizePercent: bigint;
     thirdPrizePercent: bigint;
   }> {
-    const [ticketPrice, devFeePercent, reservePoolPercent, firstPrizePercent, secondPrizePercent, thirdPrizePercent] = await Promise.all([
-      this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'TICKET_PRICE' }),
-      this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'DEV_FEE_PERCENT' }),
-      this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'RESERVE_POOL_PERCENT' }),
-      this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'FIRST_PRIZE_PERCENT' }),
-      this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'SECOND_PRIZE_PERCENT' }),
-      this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'THIRD_PRIZE_PERCENT' })
-    ]) as [bigint, bigint, bigint, bigint, bigint, bigint];
-    
-    return {
-      ticketPrice,
-      devFeePercent,
-      reservePoolPercent,
-      firstPrizePercent,
-      secondPrizePercent,
-      thirdPrizePercent
-    };
+    return this.retryOperation(async () => {
+      const [ticketPrice, devFeePercent, reservePoolPercent, firstPrizePercent, secondPrizePercent, thirdPrizePercent] = await Promise.all([
+        this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'TICKET_PRICE' }),
+        this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'DEV_FEE_PERCENT' }),
+        this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'RESERVE_POOL_PERCENT' }),
+        this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'FIRST_PRIZE_PERCENT' }),
+        this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'SECOND_PRIZE_PERCENT' }),
+        this.publicClient.readContract({ address: this.contractAddress, abi: lottoMojiFunAbi, functionName: 'THIRD_PRIZE_PERCENT' })
+      ]) as [bigint, bigint, bigint, bigint, bigint, bigint];
+      
+      return {
+        ticketPrice,
+        devFeePercent,
+        reservePoolPercent,
+        firstPrizePercent,
+        secondPrizePercent,
+        thirdPrizePercent
+      };
+    });
   }
   
   /**
    * Obtiene el precio de un ticket
    */
   public async getTicketPrice(): Promise<bigint> {
-    return this.publicClient.readContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'TICKET_PRICE'
-    }) as Promise<bigint>;
+    return this.retryOperation(async () => {
+      return this.publicClient.readContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'TICKET_PRICE'
+      }) as Promise<bigint>;
+    });
   }
   
   /**
    * Obtiene el balance de USDC de un usuario
    */
   public async getUsdcBalance(userAddress: Address): Promise<string> {
-    const balance = await this.publicClient.readContract({
-      address: this.usdcAddress,
-      abi: usdcAbi,
-      functionName: 'balanceOf',
-      args: [userAddress]
-    }) as bigint;
-    
-    const decimals = await this.publicClient.readContract({
-      address: this.usdcAddress,
-      abi: usdcAbi,
-      functionName: 'decimals'
-    }) as number;
-    
-    return formatUnits(balance, decimals);
+    return this.retryOperation(async () => {
+      const balance = await this.publicClient.readContract({
+        address: this.usdcAddress,
+        abi: usdcAbi,
+        functionName: 'balanceOf',
+        args: [userAddress]
+      }) as bigint;
+      
+      const decimals = await this.publicClient.readContract({
+        address: this.usdcAddress,
+        abi: usdcAbi,
+        functionName: 'decimals'
+      }) as number;
+      
+      return formatUnits(balance, decimals);
+    });
   }
   
   // ===== Funciones de escritura =====
@@ -309,15 +382,17 @@ export class LottoMojiFun {
       throw new Error('Wallet client not set');
     }
     
-    const hash = await this.walletClient.writeContract({
-      address: this.usdcAddress,
-      abi: usdcAbi,
-      functionName: 'approve',
-      args: [this.contractAddress, amount],
-      account: userAddress
+    return this.retryOperation(async () => {
+      const hash = await this.walletClient.writeContract({
+        address: this.usdcAddress,
+        abi: usdcAbi,
+        functionName: 'approve',
+        args: [this.contractAddress, amount],
+        account: userAddress
+      });
+      
+      return hash;
     });
-    
-    return hash;
   }
   
   /**
@@ -328,28 +403,30 @@ export class LottoMojiFun {
       throw new Error('Wallet client not set');
     }
     
-    // Verificar la asignación de USDC primero
-    const ticketPrice = await this.getTicketPrice();
-    const allowance = await this.publicClient.readContract({
-      address: this.usdcAddress,
-      abi: usdcAbi,
-      functionName: 'allowance',
-      args: [userAddress, this.contractAddress]
-    }) as bigint;
-    
-    if (allowance < ticketPrice) {
-      throw new Error('Insufficient USDC allowance. Please approve the contract to spend USDC.');
-    }
-    
-    const hash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'buyTicket',
-      args: [emojis, fid],
-      account: userAddress
+    return this.retryOperation(async () => {
+      // Verificar la asignación de USDC primero
+      const ticketPrice = await this.getTicketPrice();
+      const allowance = await this.publicClient.readContract({
+        address: this.usdcAddress,
+        abi: usdcAbi,
+        functionName: 'allowance',
+        args: [userAddress, this.contractAddress]
+      }) as bigint;
+      
+      if (allowance < ticketPrice) {
+        throw new Error('Insufficient USDC allowance. Please approve the contract to spend USDC.');
+      }
+      
+      const hash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'buyTicket',
+        args: [emojis, fid],
+        account: userAddress
+      });
+      
+      return hash;
     });
-    
-    return hash;
   }
   
   /**
@@ -360,15 +437,17 @@ export class LottoMojiFun {
       throw new Error('Wallet client not set');
     }
     
-    const hash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: lottoMojiFunAbi,
-      functionName: 'claimPrize',
-      args: [ticketId],
-      account: userAddress
+    return this.retryOperation(async () => {
+      const hash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: lottoMojiFunAbi,
+        functionName: 'claimPrize',
+        args: [ticketId],
+        account: userAddress
+      });
+      
+      return hash;
     });
-    
-    return hash;
   }
   
   // ===== Funciones de evento =====
@@ -377,89 +456,97 @@ export class LottoMojiFun {
    * Obtiene los eventos de tickets comprados
    */
   public async getTicketPurchasedEvents(fromBlock: bigint, toBlock: bigint): Promise<any[]> {
-    const logs = await this.publicClient.getLogs({
-      address: this.contractAddress,
-      event: {
-        type: 'event',
-        name: 'TicketPurchased',
-        inputs: [
-          { type: 'uint256', name: 'ticketId', indexed: true },
-          { type: 'address', name: 'buyer', indexed: true },
-          { type: 'uint256', name: 'fid', indexed: false },
-          { type: 'string[]', name: 'emojis', indexed: false },
-          { type: 'uint256', name: 'drawId', indexed: false }
-        ]
-      },
-      fromBlock,
-      toBlock
+    return this.retryOperation(async () => {
+      const logs = await this.publicClient.getLogs({
+        address: this.contractAddress,
+        event: {
+          type: 'event',
+          name: 'TicketPurchased',
+          inputs: [
+            { type: 'uint256', name: 'ticketId', indexed: true },
+            { type: 'address', name: 'buyer', indexed: true },
+            { type: 'uint256', name: 'fid', indexed: false },
+            { type: 'string[]', name: 'emojis', indexed: false },
+            { type: 'uint256', name: 'drawId', indexed: false }
+          ]
+        },
+        fromBlock,
+        toBlock
+      });
+      
+      return logs;
     });
-    
-    return logs;
   }
   
   /**
    * Obtiene los eventos de sorteos completados
    */
   public async getDrawCompletedEvents(fromBlock: bigint, toBlock: bigint): Promise<any[]> {
-    const logs = await this.publicClient.getLogs({
-      address: this.contractAddress,
-      event: {
-        type: 'event',
-        name: 'DrawCompleted',
-        inputs: [
-          { type: 'uint256', name: 'drawId', indexed: true },
-          { type: 'string[]', name: 'winningEmojis', indexed: false },
-          { type: 'uint256', name: 'prizePool', indexed: false },
-          { type: 'uint256', name: 'timestamp', indexed: false }
-        ]
-      },
-      fromBlock,
-      toBlock
+    return this.retryOperation(async () => {
+      const logs = await this.publicClient.getLogs({
+        address: this.contractAddress,
+        event: {
+          type: 'event',
+          name: 'DrawCompleted',
+          inputs: [
+            { type: 'uint256', name: 'drawId', indexed: true },
+            { type: 'string[]', name: 'winningEmojis', indexed: false },
+            { type: 'uint256', name: 'prizePool', indexed: false },
+            { type: 'uint256', name: 'timestamp', indexed: false }
+          ]
+        },
+        fromBlock,
+        toBlock
+      });
+      
+      return logs;
     });
-    
-    return logs;
   }
   
   /**
    * Obtiene los eventos de premios reclamados
    */
   public async getPrizeClaimedEvents(fromBlock: bigint, toBlock: bigint): Promise<any[]> {
-    const logs = await this.publicClient.getLogs({
-      address: this.contractAddress,
-      event: {
-        type: 'event',
-        name: 'PrizeClaimed',
-        inputs: [
-          { type: 'uint256', name: 'ticketId', indexed: true },
-          { type: 'address', name: 'winner', indexed: true },
-          { type: 'uint256', name: 'amount', indexed: false },
-          { type: 'uint256', name: 'prizeCategory', indexed: false }
-        ]
-      },
-      fromBlock,
-      toBlock
+    return this.retryOperation(async () => {
+      const logs = await this.publicClient.getLogs({
+        address: this.contractAddress,
+        event: {
+          type: 'event',
+          name: 'PrizeClaimed',
+          inputs: [
+            { type: 'uint256', name: 'ticketId', indexed: true },
+            { type: 'address', name: 'winner', indexed: true },
+            { type: 'uint256', name: 'amount', indexed: false },
+            { type: 'uint256', name: 'prizeCategory', indexed: false }
+          ]
+        },
+        fromBlock,
+        toBlock
+      });
+      
+      return logs;
     });
-    
-    return logs;
   }
   
   /**
    * Obtiene los eventos de actualización de la pool de reserva
    */
   public async getReservePoolUpdatedEvents(fromBlock: bigint, toBlock: bigint): Promise<any[]> {
-    const logs = await this.publicClient.getLogs({
-      address: this.contractAddress,
-      event: {
-        type: 'event',
-        name: 'ReservePoolUpdated',
-        inputs: [
-          { type: 'uint256', name: 'amount', indexed: false }
-        ]
-      },
-      fromBlock,
-      toBlock
+    return this.retryOperation(async () => {
+      const logs = await this.publicClient.getLogs({
+        address: this.contractAddress,
+        event: {
+          type: 'event',
+          name: 'ReservePoolUpdated',
+          inputs: [
+            { type: 'uint256', name: 'amount', indexed: false }
+          ]
+        },
+        fromBlock,
+        toBlock
+      });
+      
+      return logs;
     });
-    
-    return logs;
   }
 } 
