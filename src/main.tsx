@@ -50,13 +50,24 @@ console.log('- Farcaster SDK:', typeof window.farcasterSigner !== 'undefined' ? 
 // Base Mainnet - ID: 8453
 // Optimism - ID: 10
 
-// Inicializar Firebase al cargar la aplicación, pero sin bloquear el renderizado
-setTimeout(() => {
-  console.log('Inicializando estado del juego en segundo plano...');
-  initializeGameState().catch(error => {
+// Inicializar Firebase al cargar la aplicación
+const initializeFirebase = async () => {
+  try {
+    console.log('Inicializando estado del juego...');
+    await initializeGameState();
+    console.log('Estado del juego inicializado correctamente');
+  } catch (error) {
     console.error('Error al inicializar Firebase:', error);
-  });
-}, 2000); // Retraso de 2 segundos para permitir que la UI se cargue primero
+    
+    // Intentar nuevamente después de un retraso
+    setTimeout(() => {
+      console.log('Reintentando inicialización de Firebase...');
+      initializeGameState().catch(retryError => {
+        console.error('Error en reintento de inicialización de Firebase:', retryError);
+      });
+    }, 5000); // Reintento después de 5 segundos
+  }
+};
 
 // Verificar si estamos en Warpcast
 const isWarpcast = typeof window !== 'undefined' && 
@@ -66,6 +77,17 @@ const isWarpcast = typeof window !== 'undefined' &&
 console.log(`Entorno detectado: ${isWarpcast ? 'Warpcast' : 'Navegador normal'}`);
 console.log('Inicializando aplicación con soporte para Base y Optimism');
 console.log('Dirección del contrato LottoMojiFun:', CONTRACT_ADDRESSES.LOTTO_MOJI_FUN);
+
+// Asegurarse de que el elemento root existe
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  console.error('No se encontró el elemento root');
+  
+  // Crear un elemento root si no existe
+  const newRoot = document.createElement('div');
+  newRoot.id = 'root';
+  document.body.appendChild(newRoot);
+}
 
 // Renderizar la aplicación
 try {
@@ -78,6 +100,9 @@ try {
       </MiniKitProvider>
     </React.StrictMode>,
   );
+  
+  // Inicializar Firebase después de renderizar la aplicación
+  setTimeout(initializeFirebase, 2000);
 } catch (error) {
   console.error('Error crítico al renderizar la aplicación:', error);
   
