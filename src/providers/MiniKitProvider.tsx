@@ -96,6 +96,18 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
             }
           } else {
             console.log('No estamos en Warpcast. El usuario deberá conectarse manualmente.');
+            
+            // Intentar detectar la red de todos modos
+            try {
+              if (window.ethereum) {
+                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                const chainId = parseInt(chainIdHex, 16);
+                setCurrentChainId(chainId);
+                console.log(`Red detectada: ${chainId} (${getNetworkName(chainId)})`);
+              }
+            } catch (chainError) {
+              console.error('Error detectando red:', chainError);
+            }
           }
         } catch (error) {
           console.error('Error durante la inicialización de Farcaster:', error);
@@ -110,6 +122,38 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
     };
     
     checkWarpcastEnvironment();
+    
+    // Configurar listener para cambios de red
+    const setupNetworkChangeListener = () => {
+      if (window.ethereum) {
+        window.ethereum.on('chainChanged', (chainIdHex: string) => {
+          const chainId = parseInt(chainIdHex, 16);
+          console.log(`Red cambiada: ${chainId} (${getNetworkName(chainId)})`);
+          setCurrentChainId(chainId);
+        });
+        
+        window.ethereum.on('accountsChanged', (accounts: string[]) => {
+          console.log('Cuentas cambiadas:', accounts);
+          if (accounts.length > 0) {
+            // Refrescar el usuario de Farcaster
+            checkAndSetFarcasterUser();
+          } else {
+            // No hay cuentas, desconectar
+            setFarcasterUser(null);
+          }
+        });
+      }
+    };
+    
+    setupNetworkChangeListener();
+    
+    // Limpiar listeners al desmontar
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeListener('chainChanged', () => {});
+        window.ethereum.removeListener('accountsChanged', () => {});
+      }
+    };
   }, []);
 
   // Obtener nombre de red basado en el chainId
@@ -210,16 +254,37 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
         return false;
       }
       
+      // Verificar si tenemos una billetera activa (Ethereum)
+      let detectedWallet = user.custody_address || '';
+      let verifiedWallet = !!user.custody_address;
+      
+      // Intentar obtener la billetera actual si no tenemos una de custody_address
+      if (!detectedWallet && window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts && accounts.length > 0) {
+            detectedWallet = accounts[0];
+            console.log(`Billetera detectada desde conexión Ethereum: ${detectedWallet}`);
+            
+            // No podemos verificar que esta billetera pertenezca al usuario de Farcaster
+            // sin una firma adicional, así que la marcamos como no verificada
+            verifiedWallet = false;
+          }
+        } catch (ethError) {
+          console.error('Error obteniendo cuentas de Ethereum:', ethError);
+        }
+      }
+      
       // Mapear los datos del usuario de Farcaster
       const mappedUser: User = {
         id: `farcaster-${user.fid}`,
         username: user.username || `farcaster-${user.fid}`,
         avatar: user.pfp || undefined,
-        walletAddress: user.custody_address || undefined,
+        walletAddress: detectedWallet || undefined,
         fid: user.fid,
         isFarcasterUser: true,
-        verifiedWallet: !!user.custody_address,
-        chainId: OPTIMISM_CHAIN_ID // Por defecto Optimism, pero el usuario puede estar en cualquier red
+        verifiedWallet: verifiedWallet,
+        chainId: currentChainId || OPTIMISM_CHAIN_ID // Usamos la red detectada o Optimism por defecto
       };
       
       console.log('Usuario de Farcaster mapeado exitosamente:', mappedUser);
@@ -244,32 +309,50 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
       // En Warpcast, usamos el método signIn para conectar
       if (isWarpcastApp) {
         console.log('Conectando en entorno Warpcast...');
-        // Este método puede cambiar según la versión del SDK
-        await sdk.actions.signIn();
-        console.log('Sign-in de Farcaster completado, verificando usuario...');
-        const success = await checkAndSetFarcasterUser();
-        
-        if (success) {
-          console.log('Conexión con Farcaster exitosa');
+        try {
+          await sdk.actions.signIn();
+          console.log('Sign-in de Farcaster completado, verificando usuario...');
+          const success = await checkAndSetFarcasterUser();
           
-          // Intentar detectar en qué red está el usuario ahora
-          if (window.ethereum) {
-            try {
-              const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-              const chainId = parseInt(chainIdHex, 16);
-              setCurrentChainId(chainId);
-              console.log(`Red detectada post-conexión: ${chainId} (${getNetworkName(chainId)})`);
-            } catch (chainError) {
-              console.error('Error detectando red:', chainError);
+          if (success) {
+            console.log('Conexión con Farcaster exitosa');
+            
+            // Intentar detectar en qué red está el usuario ahora
+            if (window.ethereum) {
+              try {
+                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                const chainId = parseInt(chainIdHex, 16);
+                setCurrentChainId(chainId);
+                console.log(`Red detectada post-conexión: ${chainId} (${getNetworkName(chainId)})`);
+              } catch (chainError) {
+                console.error('Error detectando red:', chainError);
+              }
             }
+          } else {
+            console.error('ERROR: No se pudo obtener usuario después de signIn');
           }
-        } else {
-          console.error('ERROR: No se pudo obtener usuario después de signIn');
+        } catch (signInError) {
+          console.error('Error en signIn de Farcaster:', signInError);
+          
+          // Intentar obtener el usuario de todos modos
+          await checkAndSetFarcasterUser();
         }
       } else {
-        // En un navegador normal, podemos redirigir a Warpcast o mostrar instrucciones
-        console.log('Esta funcionalidad solo está disponible en Warpcast');
-        // Alternativamente, podríamos redirigir a Warpcast usando window.location
+        // En un navegador normal, intentar conectar con signIn
+        console.log('Intentando conectar en navegador normal...');
+        try {
+          await sdk.actions.signIn();
+          console.log('Sign-in en navegador completado, verificando usuario...');
+          
+          const success = await checkAndSetFarcasterUser();
+          if (success) {
+            console.log('Conexión con Farcaster exitosa en navegador');
+          } else {
+            console.error('ERROR: No se pudo obtener usuario después de signIn en navegador');
+          }
+        } catch (browserError) {
+          console.error('Error conectando en navegador:', browserError);
+        }
       }
     } catch (error) {
       console.error('Error conectando con Farcaster:', error);
