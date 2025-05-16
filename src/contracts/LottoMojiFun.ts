@@ -104,11 +104,25 @@ export class LottoMojiFun {
     this.contractAddress = contractAddress;
     this.usdcAddress = usdcAddress;
     
-    // Cliente público para lectura
-    this.publicClient = createPublicClient({
-      chain: base,
-      transport: http()
-    });
+    // Cliente público para lectura - usando múltiples RPC para mayor confiabilidad
+    try {
+      console.log('Inicializando cliente público para Base con dirección de contrato:', contractAddress);
+      this.publicClient = createPublicClient({
+        chain: base,
+        transport: http('https://base.publicnode.com'),
+        batch: {
+          multicall: true,
+        },
+      });
+    } catch (error) {
+      console.error('Error al crear el cliente público:', error);
+      // Fallback a RPC alternativo
+      console.log('Intentando con RPC alternativo...');
+      this.publicClient = createPublicClient({
+        chain: base,
+        transport: http('https://mainnet.base.org'),
+      });
+    }
   }
   
   // Configurar cliente de billetera
