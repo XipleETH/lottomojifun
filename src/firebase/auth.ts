@@ -52,54 +52,65 @@ export const getFarcasterUserData = async (): Promise<User | null> => {
     }
     
     try {
-      // Obtener información básica del usuario
-      const user = await sdk.getUser();
-      if (!user) {
-        console.log('No hay usuario autenticado en Farcaster');
-        return null;
-      }
+      // Establecer un tiempo máximo para la operación
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.log("Tiempo de espera agotado al obtener usuario de Farcaster");
+          resolve(null);
+        }, 2000); // 2 segundos máximo
+      });
       
-      console.log('Usuario de Farcaster obtenido:', user);
+      // Crear la promesa para obtener el usuario
+      const getUserPromise = (async () => {
+        // Obtener información básica del usuario
+        const user = await sdk.getUser();
+        if (!user) {
+          console.log('No hay usuario autenticado en Farcaster');
+          return null;
+        }
+        
+        console.log('Usuario de Farcaster obtenido:', user);
+        
+        // Verificación de billetera
+        let verifiedWallet = false;
+        let walletAddress = user.custody_address;
+        
+        // Si tenemos una dirección de custodia, asumimos que está verificada
+        if (walletAddress) {
+          verifiedWallet = true;
+        }
+        
+        // Intentar obtener información adicional del perfil
+        let additionalInfo: FarcasterProfile | null = null;
+        try {
+          additionalInfo = await fetchFarcasterProfileInfo(user.fid);
+        } catch (e) {
+          console.log('No se pudo obtener información adicional del perfil');
+        }
+        
+        // Mapear los datos del usuario de Farcaster a nuestro tipo User
+        return {
+          id: `farcaster-${user.fid}`,
+          username: user.username || `farcaster-${user.fid}`,
+          avatar: user.pfp || undefined,
+          walletAddress: walletAddress || undefined,
+          fid: user.fid,
+          isFarcasterUser: true,
+          verifiedWallet: verifiedWallet,
+          chainId: 10, // Optimism es la cadena principal para Farcaster
+          // Información adicional si está disponible
+          tokenBalance: "0",
+          nfts: [],
+          lastTransactionHash: undefined
+        };
+      })();
       
-      // Verificación de billetera
-      let verifiedWallet = false;
-      let walletAddress = user.custody_address;
-      
-      // Si tenemos una dirección de custodia, asumimos que está verificada
-      if (walletAddress) {
-        verifiedWallet = true;
-      }
-      
-      // Intentar obtener información adicional del perfil
-      let additionalInfo: FarcasterProfile | null = null;
-      try {
-        additionalInfo = await fetchFarcasterProfileInfo(user.fid);
-      } catch (e) {
-        console.log('No se pudo obtener información adicional del perfil');
-      }
-      
-      // Mapear los datos del usuario de Farcaster a nuestro tipo User
-      return {
-        id: `farcaster-${user.fid}`,
-        username: user.username || `farcaster-${user.fid}`,
-        avatar: user.pfp || undefined,
-        walletAddress: walletAddress || undefined,
-        fid: user.fid,
-        isFarcasterUser: true,
-        verifiedWallet: verifiedWallet,
-        chainId: 10, // Optimism es la cadena principal para Farcaster
-        // Información adicional si está disponible
-        tokenBalance: "0",
-        nfts: [],
-        lastTransactionHash: undefined
-      };
+      // Usar la promesa que termine primero
+      return await Promise.race([getUserPromise, timeoutPromise]);
     } catch (error) {
       console.error('Error obteniendo usuario de Farcaster:', error);
       return null;
     }
-    
-    // No usar fallback de usuario simulado
-    return null;
   } catch (error) {
     console.error('Error obteniendo datos de Farcaster:', error);
     return null;

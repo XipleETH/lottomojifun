@@ -31,42 +31,60 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   const [farcasterUser, setFarcasterUser] = useState<User | null>(null);
   const [isFarcasterReady, setIsFarcasterReady] = useState(false);
   const [isWarpcastApp, setIsWarpcastApp] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Verificar si estamos en la app de Warpcast
   useEffect(() => {
     const checkWarpcastEnvironment = async () => {
       try {
+        // Marcar como inicializado incluso si hay errores
+        setTimeout(() => {
+          if (!isInitialized) {
+            console.log('Forzando inicialización tras timeout');
+            setIsInitialized(true);
+          }
+        }, 2000);
+
         if (!sdk) {
           console.error('ERROR: SDK de Farcaster no está disponible');
+          setIsInitialized(true);
           return;
         }
         
         console.log('Inicializando SDK de Farcaster...');
         
-        // Verificar si el SDK está listo
-        await sdk.actions.ready();
-        setIsFarcasterReady(true);
-        console.log('SDK de Farcaster listo');
-        
-        // Verificar si estamos en Warpcast
-        const isFrame = await sdk.isFrameAvailable();
-        setIsWarpcastApp(isFrame);
-        
-        console.log('Entorno de Farcaster detectado:', { 
-          isFrame,
-          isSdkAvailable: !!sdk,
-          signer: !!sdk.signer
-        });
-        
-        // Si estamos en Warpcast, intentamos obtener el usuario automáticamente
-        if (isFrame) {
-          console.log('Detectado Warpcast, obteniendo usuario automáticamente...');
-          await checkAndSetFarcasterUser();
-        } else {
-          console.log('No estamos en Warpcast. El usuario deberá conectarse manualmente.');
+        try {
+          // Verificar si el SDK está listo
+          await sdk.actions.ready();
+          setIsFarcasterReady(true);
+          console.log('SDK de Farcaster listo');
+          
+          // Verificar si estamos en Warpcast
+          const isFrame = await sdk.isFrameAvailable();
+          setIsWarpcastApp(isFrame);
+          
+          console.log('Entorno de Farcaster detectado:', { 
+            isFrame,
+            isSdkAvailable: !!sdk,
+            signer: !!sdk.signer
+          });
+          
+          // Si estamos en Warpcast, intentamos obtener el usuario automáticamente
+          if (isFrame) {
+            console.log('Detectado Warpcast, obteniendo usuario automáticamente...');
+            await checkAndSetFarcasterUser();
+          } else {
+            console.log('No estamos en Warpcast. El usuario deberá conectarse manualmente.');
+          }
+        } catch (error) {
+          console.error('Error durante la inicialización de Farcaster:', error);
+        } finally {
+          // Marcar como inicializado sin importar el resultado
+          setIsInitialized(true);
         }
       } catch (error) {
-        console.error('Error checking Farcaster environment:', error);
+        console.error('Error crítico en checkWarpcastEnvironment:', error);
+        setIsInitialized(true);
       }
     };
     
@@ -161,6 +179,12 @@ export const MiniKitAuthProvider: React.FC<MiniKitAuthProviderProps> = ({ childr
   const checkFarcasterConnection = async () => {
     return await checkAndSetFarcasterUser();
   };
+
+  // Si aún no estamos inicializados, mostrar un estado intermedio
+  if (!isInitialized) {
+    console.log('MiniKitProvider aún inicializando...');
+    // No bloqueamos el renderizado, continuamos con valores predeterminados
+  }
 
   return (
     <MiniKitContext.Provider
