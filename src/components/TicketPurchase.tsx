@@ -84,6 +84,9 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
     }
   };
   
+  // Verificar si el botón de compra debe estar habilitado
+  const isPurchaseButtonEnabled = selectedEmojis.length === MAX_EMOJIS && !isPurchasing;
+  
   // Mostrar contenido basado en el estado actual
   const renderContent = () => {
     // Si se completó la compra
@@ -205,8 +208,13 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
         
         <button
           onClick={handlePurchase}
-          disabled={selectedEmojis.length !== MAX_EMOJIS || isPurchasing}
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          disabled={!isPurchaseButtonEnabled}
+          className={`
+            w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center
+            ${isPurchaseButtonEnabled 
+              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white' 
+              : 'bg-gray-600/50 text-white/50 cursor-not-allowed'}
+          `}
         >
           {isPurchasing ? (
             <>
@@ -215,7 +223,9 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ onPurchaseComplete }) =
             </>
           ) : (
             <>
-              Comprar ticket por 1 USDC
+              {selectedEmojis.length === MAX_EMOJIS 
+                ? 'Comprar ticket por 1 USDC' 
+                : `Selecciona ${MAX_EMOJIS - selectedEmojis.length} emoji${MAX_EMOJIS - selectedEmojis.length !== 1 ? 's' : ''} más`}
             </>
           )}
         </button>

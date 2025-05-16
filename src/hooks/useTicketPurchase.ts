@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { useFarcasterWallet } from './useFarcasterWallet';
 import { useWallet } from './useWallet';
 import { useMiniKitAuth } from '../providers/MiniKitProvider';
+import { generateTicket } from '../firebase/game';
 
 // Importamos la ABI del contrato
 import LottoMojiFunABI from '../contracts/LottoMojiFunABI.json';
@@ -97,6 +98,13 @@ export const useTicketPurchase = (): TicketPurchaseHook => {
       }
       
       console.log(`Comprando ticket con emojis: ${emojis.join(', ')} para FID: ${farcasterFid}`);
+      
+      // Guardar el ticket en Firebase
+      const firebaseTicket = await generateTicket(emojis);
+      if (!firebaseTicket) {
+        throw new Error('Error al guardar el ticket en la base de datos');
+      }
+      console.log('Ticket guardado en Firebase:', firebaseTicket.id);
       
       // Obtener provider y signer
       if (!window.ethereum) {
