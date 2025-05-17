@@ -8,10 +8,31 @@
   },
   "requirements": {
     "needLogin": true,
-    "needFrame": true
+    "needFrame": true,
+    "needWallet": true
   },
   "frames": {
     "version": "1",
-    "autoSignIn": true
+    "autoSignIn": true,
+    "autoConnect": true,
+    "connectMessage": "Conectando con Warpcast..."
+  },
+  "wallet": {
+    "requiresConnection": true,
+    "autoConnect": true,
+    "chains": [10, 8453],
+    "preferredChain": 10
+  },
+  "permissions": [
+    "sign",
+    "wallet"
+  ],
+  "farcaster": {
+    "appId": "MD6NcmUnNhly",
+    "hostnames": ["lottomojifun.vercel.app"],
+    "connectOptions": {
+      "siweUri": "https://lottomojifun.vercel.app",
+      "domain": "lottomojifun.vercel.app"
+    }
   }
 } 

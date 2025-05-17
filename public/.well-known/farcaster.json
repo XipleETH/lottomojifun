@@ -38,9 +38,11 @@
   },
 
   "miniApp": {
+    "id": "MD6NcmUnNhly",
     "autoSignIn": true,
+    "autoConnect": true, 
     "requiresWallet": true,
-    "walletPermissions": ["read", "sign"],
+    "walletPermissions": ["read", "sign", "transaction"],
     "appType": "game",
     "supportUrl": "https://lottomojifun.vercel.app/help",
     "notificationTypes": [
@@ -54,6 +56,21 @@
         "title": "Draw Notification",
         "description": "Get notified when a new draw is about to happen"
       }
-    ]
+    ],
+    "supportedChains": [10, 8453],
+    "preferredChain": 10,
+    "connectMessage": "Conectando con tu cuenta de Warpcast...",
+    "walletConnectProjectId": "${process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID}"
+  },
+  
+  "permissions": {
+    "isFrameRequired": true,
+    "fcauth": {
+      "domain": "lottomojifun.vercel.app",
+      "siweUri": "https://lottomojifun.vercel.app"
+    },
+    "wallet": {
+      "chains": [10, 8453]
+    }
   }
 } 
