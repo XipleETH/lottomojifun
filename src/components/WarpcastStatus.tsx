@@ -71,6 +71,13 @@ export const WarpcastStatus: React.FC = () => {
     }
   }, []);
 
+  // URLs para la mini app
+  const miniAppUrl = 'https://warpcast.com/miniapps/MD6NcmUnNhly/lottomoji';
+  const warpcastUrl = 'https://warpcast.com/~/download';
+  
+  // Detectar navegador móvil
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  
   // Si no estamos en Warpcast y no hay debug, no mostramos nada
   if (!isInWarpcast && !showDebug) {
     return (
@@ -91,52 +98,96 @@ export const WarpcastStatus: React.FC = () => {
   // Información de diagnóstico detallada
   if (showDebug) {
     return (
-      <div className="text-left p-3 mb-4 bg-gray-800 text-white rounded-lg border border-gray-700 font-mono text-xs overflow-auto">
-        <div className="flex justify-between mb-2">
-          <h3 className="font-bold">Diagnóstico de Warpcast</h3>
-          <button 
-            onClick={() => setShowDebug(false)}
-            className="text-xs text-blue-400 underline"
-          >
-            Ocultar
-          </button>
+      <div className="max-w-xl mx-auto bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-4 text-sm">
+        <h2 className="text-lg font-semibold mb-2 text-purple-600 dark:text-purple-400">
+          Diagnóstico de Warpcast
+        </h2>
+        
+        {!isWarpcastApp && (
+          <div className="p-3 mb-3 border border-orange-300 bg-orange-100 dark:bg-orange-900 dark:border-orange-700 rounded-lg">
+            <p className="font-medium text-orange-800 dark:text-orange-300 mb-2">
+              ⚠️ Estás accediendo desde un navegador normal, no desde Warpcast
+            </p>
+            <p className="text-sm text-orange-700 dark:text-orange-400 mb-2">
+              La aplicación funciona mejor dentro de la app de Warpcast. Algunas funciones como la firma de transacciones pueden no estar disponibles.
+            </p>
+            <div className="mt-2">
+              <a 
+                href={miniAppUrl}
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg text-sm mr-2"
+              >
+                Abrir en Warpcast
+              </a>
+              {isMobile && !isWarpcastApp && (
+                <a 
+                  href={warpcastUrl}
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-block bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg text-sm"
+                >
+                  Descargar Warpcast
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-2 gap-y-2">
+          <div className="font-medium">isWarpcastApp:</div>
+          <div>{isWarpcastApp ? '✅' : '❌'}</div>
+          
+          <div className="font-medium">isOnchainWarpcast:</div>
+          <div>{isOnchainWarpcast ? '✅' : '❌'}</div>
+          
+          <div className="font-medium">isFarcasterAvailable:</div>
+          <div>{isFarcasterAvailable ? '✅' : '❌'}</div>
+          
+          <div className="font-medium">isLoading:</div>
+          <div>{isLoading ? '✅' : '❌'}</div>
+          
+          <div className="font-medium">Error:</div>
+          <div>{error ? `❌ ${error}` : '❌ SDK de Farcaster no disponible'}</div>
         </div>
         
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-gray-700 p-2 rounded">
-            <p className="font-bold mb-1">Estado:</p>
-            <p>isWarpcastApp: {isWarpcastApp ? '✅' : '❌'}</p>
-            <p>isOnchainWarpcast: {isOnchainWarpcast ? '✅' : '❌'}</p>
-            <p>isFarcasterAvailable: {isFarcasterAvailable ? '✅' : '❌'}</p>
-            <p>isLoading: {isLoading ? '⏳' : '✅'}</p>
-            <p>Error: {error ? '❌ ' + error : '✅ None'}</p>
-          </div>
-          
-          <div className="bg-gray-700 p-2 rounded">
-            <p className="font-bold mb-1">Usuario activo:</p>
-            <p>Fuente: {warpcastUser ? 'Warpcast' : (onchainUser ? 'OnchainKit' : (authUser ? 'Auth' : 'Ninguna'))}</p>
-            <p>Username: {user?.username || 'N/A'}</p>
-            <p>FID: {user?.fid || 'N/A'}</p>
-            <p>Wallet: {user?.walletAddress ? `${user.walletAddress.substring(0, 6)}...${user.walletAddress.substring(user.walletAddress.length - 4)}` : 'N/A'}</p>
-            <p>Verified: {user?.verifiedWallet ? '✅' : '❌'}</p>
+        <div className="mt-4 border-t border-gray-300 dark:border-gray-700 pt-3">
+          <h3 className="font-medium mb-2">Usuario activo:</h3>
+          <div className="grid grid-cols-2 gap-y-1 text-xs">
+            <div className="font-medium">Fuente:</div>
+            <div>{user ? (isWarpcastApp ? 'Warpcast' : 'OnchainKit') : 'Ninguna'}</div>
+            
+            <div className="font-medium">Username:</div>
+            <div>{user?.username || 'N/A'}</div>
+            
+            <div className="font-medium">FID:</div>
+            <div>{user?.fid ? user.fid.toString() : 'N/A'}</div>
+            
+            <div className="font-medium">Wallet:</div>
+            <div>
+              {user?.walletAddress 
+                ? `${user.walletAddress.substring(0, 6)}...${user.walletAddress.substring(user.walletAddress.length - 4)}`
+                : 'N/A'}
+            </div>
+            
+            <div className="font-medium">Verified:</div>
+            <div>{user?.verifiedWallet ? '✅' : '❌'}</div>
           </div>
         </div>
         
-        <div className="mt-2 flex justify-center gap-2">
-          <button 
-            onClick={() => retry()}
-            className="bg-blue-600 text-white py-1 px-3 rounded text-xs"
-          >
-            Reintentar conexión
-          </button>
-          
-          <button 
-            onClick={createEmergencyUser}
-            className="bg-red-600 text-white py-1 px-3 rounded text-xs"
-            title="Usa esto solo si ninguna otra opción funciona"
-          >
-            Crear usuario de emergencia
-          </button>
+        {/* Mensaje tutorial */}
+        <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-300 dark:border-gray-700 pt-3">
+          <p>
+            <strong>Nota:</strong> Para probar todas las funciones, accede desde la app de Warpcast.
+            {!user && !isLoading && (
+              <button
+                onClick={() => connect()}
+                className="ml-2 text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                Conectar manualmente
+              </button>
+            )}
+          </p>
         </div>
       </div>
     );

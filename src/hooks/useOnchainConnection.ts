@@ -12,6 +12,7 @@ export function useOnchainConnection() {
   const [isWarpcastApp, setIsWarpcastApp] = useState(false);
   const [hasCheckedUserData, setHasCheckedUserData] = useState(false);
   const [sdkDetectionAttempts, setSdkDetectionAttempts] = useState(0);
+  const [isOnchainWarpcast, setIsOnchainWarpcast] = useState(false);
 
   // Utilizar los hooks de OnchainKit
   const { context } = useMiniKit();
@@ -54,7 +55,7 @@ export function useOnchainConnection() {
   // Crear usuario genérico con información mejorada - sin dependencia circular
   const createGenericUser = useCallback(() => {
     try {
-      console.log('Creando usuario genérico de Warpcast');
+      console.log('Creando usuario genérico para permitir tickets (MODO DESARROLLO)');
       
       // Intentar extraer alguna información útil
       let existingData = {};
@@ -88,7 +89,7 @@ export function useOnchainConnection() {
         chainId: 10 // Optimism por defecto
       };
       
-      console.log('Usuario genérico creado para Warpcast (emergencia):', genericUser);
+      console.log('Usuario genérico creado para permitir tickets:', genericUser);
       
       // Guardar en localStorage para uso futuro
       try {
@@ -134,8 +135,8 @@ export function useOnchainConnection() {
         if (isLoadingRef.current) {
           console.log('Timeout de espera de contexto después de signIn');
           
-          // Si estamos en Warpcast pero sin wallet después del timeout, crear usuario genérico
-          if (isWarpcastAppRef.current && !userRef.current) {
+          // SIEMPRE creamos un usuario genérico si no hay usuario después del timeout
+          if (!userRef.current) {
             console.log('Creando usuario genérico después del timeout');
             createGenericUser();
           } else {
@@ -149,14 +150,9 @@ export function useOnchainConnection() {
       console.error('Error en conexión con OnchainKit:', e);
       setError(`Error en conexión: ${e instanceof Error ? e.message : String(e)}`);
       
-      // Si hay error y estamos en Warpcast, crear usuario genérico para que la aplicación funcione
-      if (isWarpcastAppRef.current) {
-        console.log('Creando usuario genérico después de error en conexión');
-        createGenericUser();
-      } else {
-        setIsLoading(false);
-        setHasCheckedUserData(true);
-      }
+      // SIEMPRE creamos un usuario genérico si hay un error en la conexión
+      console.log('Creando usuario genérico después de error en conexión');
+      createGenericUser();
       
       return false;
     }
@@ -175,6 +171,7 @@ export function useOnchainConnection() {
         
         // Verificar información de OnchainKit
         const hasOnchainContext = !!context?.client;
+        setIsOnchainWarpcast(hasOnchainContext);
         
         // Buscar señales de Frame en window - AMPLIADO
         const hasFrameGlobals = !!(
@@ -230,160 +227,130 @@ export function useOnchainConnection() {
             setTimeout(() => detectWarpcast(), 500); // Reintento
             return;
           }
-          
-          // Si estamos en Warpcast y no tenemos un SDK después de varios intentos,
-          // creamos un usuario genérico para permitir la experiencia
-          if (!sdk && sdkDetectionAttempts >= 3 && !userRef.current && !hasCheckedUserData) {
-            console.log('En Warpcast pero sin SDK después de múltiples intentos. Usando usuario genérico de emergencia.');
-            createGenericUser();
-            return;
-          }
-          
-          // Si detectamos que estamos en Warpcast, intentamos inicializar la conexión
-          if (detected && !hasCheckedUserData && !userRef.current) {
-            // Intento de autenticación automática
-            setTimeout(() => {
-              if (!userRef.current && !hasCheckedUserData) {
-                console.log('Iniciando verificación automática de usuario en Warpcast...');
-                connect(true);
-              }
-            }, 500);
-          }
-        } else {
-          // Si no estamos en Warpcast, terminar carga
-          if (isLoadingRef.current && !userRef.current) {
-            setIsLoading(false);
-          }
+        }
+        
+        // MODIFICACIÓN IMPORTANTE: SIEMPRE crear un usuario genérico si no hay usuario después de los intentos
+        // Esto permitirá la creación de tickets incluso en el navegador normal
+        if (!userRef.current && !hasCheckedUserData) {
+          console.log('Sin usuario detectado después de verificación de entorno. Usando usuario genérico.');
+          setTimeout(() => {
+            if (!userRef.current && !hasCheckedUserData) {
+              console.log('Creando usuario genérico para permitir tickets...');
+              createGenericUser();
+            }
+          }, 1000);
         }
       } catch (e) {
         console.error('Error detectando Warpcast:', e);
-        setError(`Error detectando entorno: ${e instanceof Error ? e.message : String(e)}`);
         
-        // Si hay un error, pero tenemos razones para creer que estamos en Warpcast
-        // crear un usuario genérico por seguridad
-        if (window !== window.parent || window.location.href.includes('warpcast')) {
-          console.log('Error en detección, pero posiblemente en Warpcast. Usando usuario genérico.');
+        // En caso de error, también crear usuario genérico
+        if (!userRef.current && !hasCheckedUserData) {
+          console.log('Error detectando entorno. Usando usuario genérico por defecto.');
           createGenericUser();
-        } else {
-          setIsLoading(false);
         }
       }
     };
     
     detectWarpcast();
-  }, [context, hasCheckedUserData, sdkDetectionAttempts, detectSdk, createGenericUser, connect]);
+  }, [context, detectSdk, sdkDetectionAttempts, createGenericUser, hasCheckedUserData]);
 
-  // Mapear la información de MiniKit a nuestro formato de usuario
+  // Efecto para manejar cambios en el contexto de OnchainKit
   useEffect(() => {
     const updateUserFromContext = async () => {
       try {
-        if (context?.client) {
-          console.log('Contexto OnchainKit disponible:', context.client);
+        if (!context) {
+          console.log('Todavía no hay contexto de OnchainKit disponible');
+          return;
+        }
+        
+        console.log('Contexto de OnchainKit recibido:', {
+          hasClient: !!context.client,
+          hasChain: !!context.chain,
+          hasAccount: !!context.walletClient?.account,
+          hasProperties: Object.keys(context || {})
+        });
+        
+        // Verificar si tenemos un cliente y una cuenta
+        if (context.walletClient?.account) {
+          const account = context.walletClient.account;
+          const chain = context.chain;
           
-          // Verificar si tenemos información de wallet
-          if (context.client.wallet?.address) {
-            const { address, chainId } = context.client.wallet;
-            
-            console.log('Información de wallet disponible en OnchainKit:', { address, chainId });
-            
-            // Intentar obtener FID
-            let fid = 0;
-            try {
-              // Intentar obtener desde localStorage
-              const storedData = localStorage.getItem('farcaster_user');
-              if (storedData) {
-                const userData = JSON.parse(storedData);
-                fid = userData.fid || 0;
-              }
-            } catch (e) {
-              console.warn('No se pudo recuperar FID del almacenamiento:', e);
-            }
-            
-            // Crear el objeto de usuario con la información disponible
-            const newUser: User = {
-              id: `farcaster-wallet-${address}`,
-              username: `user-${address.substring(0, 6)}`,
-              walletAddress: address,
-              fid: fid,
-              isFarcasterUser: true,
-              verifiedWallet: true,
-              chainId: chainId || 10 // Asumimos Optimism por defecto
-            };
-            
-            console.log('Usuario creado desde OnchainKit:', newUser);
-            setUser(newUser);
-          } else if (!hasCheckedUserData) {
-            // Si no hay wallet pero estamos en Warpcast, crear un usuario genérico
-            if (isWarpcastAppRef.current) {
-              console.log('En Warpcast pero sin wallet detectada, creando usuario genérico');
-              createGenericUser();
-            } else {
-              console.log('No hay wallet y no estamos en Warpcast');
-              setUser(null);
-            }
-          }
+          console.log('Cuenta de OnchainKit disponible:', {
+            address: account.address,
+            chainId: chain?.id
+          });
           
-          setHasCheckedUserData(true);
+          // Crear un usuario a partir del contexto
+          const newUser: User = {
+            id: `onchain-${account.address}`,
+            username: `Onchain User`,
+            walletAddress: account.address,
+            isFarcasterUser: true, // Se considera usuario de Farcaster por OnchainKit
+            verifiedWallet: true,
+            chainId: chain?.id || 10
+          };
+          
+          console.log('Usuario creado desde OnchainKit:', newUser);
+          
+          setUser(newUser);
           setIsLoading(false);
+          setHasCheckedUserData(true);
         } else {
-          // Si no hay contexto pero estamos en Warpcast, crear usuario genérico
-          if (isWarpcastAppRef.current && !hasCheckedUserData) {
-            console.log('Sin contexto OnchainKit pero en Warpcast, creando usuario genérico');
-            createGenericUser();
-          }
+          console.log('Sin cuenta de wallet disponible en contexto OnchainKit');
           
-          if (!isLoadingRef.current || hasCheckedUserData) {
-            setIsLoading(false);
+          // Si no hay usuario después de detectar contexto, crear uno genérico
+          if (!userRef.current && !hasCheckedUserData) {
+            createGenericUser();
           }
         }
       } catch (e) {
-        console.error('Error actualizando usuario desde contexto:', e);
-        setError(`Error actualizando usuario: ${e instanceof Error ? e.message : String(e)}`);
+        console.error('Error procesando contexto de OnchainKit:', e);
         
-        // Si hay error pero estamos en Warpcast, crear usuario genérico
-        if (isWarpcastAppRef.current && !userRef.current) {
+        // En caso de error, generar usuario genérico
+        if (!userRef.current) {
           createGenericUser();
-        } else {
-          setIsLoading(false);
-          setHasCheckedUserData(true);
         }
       }
     };
     
     updateUserFromContext();
-  }, [context, hasCheckedUserData, createGenericUser]);
+  }, [context, createGenericUser, hasCheckedUserData]);
 
-  // Función para cerrar sesión
+  // Desconectar
   const disconnect = useCallback(async () => {
     try {
+      setIsLoading(true);
       await signOut();
       setUser(null);
+      setError(null);
       setHasCheckedUserData(false);
-      console.log('Sesión cerrada');
+      
+      // Limpiar localStorage
+      try {
+        localStorage.removeItem('warpcast_generic_user');
+        localStorage.removeItem('farcaster_user');
+      } catch (e) {
+        console.warn('Error limpiando localStorage:', e);
+      }
+      
+      setIsLoading(false);
       return true;
     } catch (e) {
-      console.error('Error en cierre de sesión:', e);
-      setError(`Error en cierre de sesión: ${e instanceof Error ? e.message : String(e)}`);
+      console.error('Error en desconexión:', e);
+      setError(`Error en desconexión: ${e instanceof Error ? e.message : String(e)}`);
+      setIsLoading(false);
       return false;
     }
   }, [signOut]);
-
-  // Si estamos en modo agresivo y ya intentamos 3 veces, pero seguimos cargando,
-  // crear un usuario genérico como último recurso
-  useEffect(() => {
-    if (isWarpcastApp && isLoading && sdkDetectionAttempts >= 3 && !user) {
-      console.log('Después de múltiples intentos y detección positiva de Warpcast, creando usuario de emergencia');
-      createGenericUser();
-    }
-  }, [isWarpcastApp, isLoading, sdkDetectionAttempts, user, createGenericUser]);
 
   return {
     user,
     isLoading,
     error,
-    isWarpcastApp,
-    isConnected: !!user,
     connect,
-    disconnect
+    disconnect,
+    isWarpcastApp,
+    isOnchainWarpcast,
+    isFarcasterAvailable: !!detectSdk()
   };
 } 
