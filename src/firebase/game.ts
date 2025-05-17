@@ -17,23 +17,9 @@ import { GameResult, Ticket } from '../types';
 import { getCurrentUser } from './auth';
 
 const GAME_RESULTS_COLLECTION = 'game_results';
-const DEFAULT_TICKETS_COLLECTION = 'player_tickets'; // Cambiado a player_tickets por defecto
+const TICKETS_COLLECTION = 'tickets';
 const GAME_STATE_DOC = 'current_game_state';
 const RESULTS_LIMIT = 50;
-
-// Función para obtener el nombre de la colección de tickets activa
-const getTicketsCollectionName = async (): Promise<string> => {
-  try {
-    const stateDoc = await getDoc(doc(db, 'game_state', GAME_STATE_DOC));
-    const data = stateDoc.data();
-    
-    // Usar la colección especificada en el estado del juego o la predeterminada
-    return data?.ticketsCollection || DEFAULT_TICKETS_COLLECTION;
-  } catch (error) {
-    console.error('Error obteniendo nombre de colección de tickets:', error);
-    return DEFAULT_TICKETS_COLLECTION;
-  }
-};
 
 // Convertir documento de Firestore a nuestro tipo de resultado de juego
 const mapFirestoreGameResult = (doc: any): GameResult => {
@@ -63,89 +49,21 @@ const mapFirestoreTicket = (doc: any): Ticket => {
 // Generar un ticket
 export const generateTicket = async (numbers: string[]): Promise<Ticket | null> => {
   try {
-    const user = await getCurrentUser();
+    const user = getCurrentUser();
     
-    // Verificar que el usuario esté autenticado como usuario de Farcaster
-    // Nota: Ya no requerimos wallet conectada para generar tickets
-    if (!user || !user.isFarcasterUser) {
-      console.error('Error generating ticket: User is not authenticated with Farcaster');
-      return null;
-    }
-    
-    // Garantizar que siempre tengamos una dirección de wallet
-    // Si el usuario no tiene wallet conectada, generamos una dirección derivada de su ID
-    let walletAddress = user.walletAddress;
-    if (!walletAddress || walletAddress.length < 40) {
-      // Generar una dirección basada en el ID o FID
-      if (user.fid && user.fid > 0) {
-        // Si tenemos FID pero no wallet, usar un patrón consistente
-        walletAddress = `0x${user.fid.toString().padStart(40, '0')}`;
-      } else {
-        // Si no tenemos ni wallet ni FID, generar basado en el ID
-        const idHash = user.id.replace(/[^a-zA-Z0-9]/g, '');
-        walletAddress = `0x${idHash.padEnd(40, '0').substring(0, 40)}`;
-      }
-      console.log(`Usuario sin wallet conectada. Usando dirección derivada: ${walletAddress}`);
-    }
-    
-    // Verificar que los números sean exactamente 4 emojis
-    if (!numbers || numbers.length !== 4) {
-      console.error('Error generating ticket: Invalid numbers (must be exactly 4 emojis)');
-      return null;
-    }
-    
-    // Obtener el nombre de la colección de tickets activa
-    const ticketsCollection = await getTicketsCollectionName();
-    console.log(`Usando colección de tickets: ${ticketsCollection}`);
-    
-    // Generar un hash único para el ticket
-    const uniqueHash = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-    
-    // Incluir información detallada de Farcaster en el ticket
     const ticketData = {
       numbers,
       timestamp: serverTimestamp(),
-      userId: user.id,
-      username: user.username || 'Farcaster User',
-      walletAddress: walletAddress,
-      fid: user.fid || 0,
-      isFarcasterUser: true,
-      verifiedWallet: user.verifiedWallet || false,
-      chainId: user.chainId || 10, // Optimism por defecto
-      ticketHash: uniqueHash,
-      createdAt: new Date().toISOString(),
-      source: 'warpcast_miniapp'
+      userId: user?.id || 'anonymous'
     };
     
-    // Guardar el ticket en Firestore con reintentos
-    let ticketRef;
-    const maxRetries = 3;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        ticketRef = await addDoc(collection(db, ticketsCollection), ticketData);
-        break; // Si llega aquí, el guardado fue exitoso
-      } catch (retryError) {
-        console.error(`Error en intento ${i+1}/${maxRetries} guardando ticket:`, retryError);
-        if (i === maxRetries - 1) throw retryError; // Re-lanzar en el último intento
-        await new Promise(resolve => setTimeout(resolve, 500)); // Esperar antes de reintentar
-      }
-    }
+    const ticketRef = await addDoc(collection(db, TICKETS_COLLECTION), ticketData);
     
-    if (!ticketRef) {
-      throw new Error('No se pudo crear el ticket después de múltiples intentos');
-    }
-    
-    console.log(`Ticket creado con ID: ${ticketRef.id} para el usuario de Farcaster ${user.username} (FID: ${user.fid || 'N/A'}, Wallet: ${walletAddress})`);
-    console.log(`Emojis seleccionados: ${numbers.join(' ')}`);
-    
-    // Devolver el ticket creado
     return {
       id: ticketRef.id,
       numbers,
       timestamp: Date.now(),
-      userId: user.id,
-      walletAddress: walletAddress,
-      fid: user.fid
+      userId: user?.id || 'anonymous'
     };
   } catch (error) {
     console.error('Error generating ticket:', error);
@@ -242,56 +160,40 @@ export const subscribeToUserTickets = (
   callback: (tickets: Ticket[]) => void
 ) => {
   try {
-    // Primero obtenemos el usuario actual como promesa
-    getCurrentUser().then(async user => {
-      if (!user) {
-        callback([]);
-        return () => {};
-      }
-      
-      // Obtener el nombre de la colección de tickets activa
-      const ticketsCollection = await getTicketsCollectionName();
-      console.log(`[subscribeToUserTickets] Usando colección de tickets: ${ticketsCollection}`);
-      
-      const ticketsQuery = query(
-        collection(db, ticketsCollection),
-        where('userId', '==', user.id),
-        orderBy('timestamp', 'desc')
-      );
-      
-      return onSnapshot(ticketsQuery, (snapshot) => {
-        try {
-          const tickets = snapshot.docs.map(doc => {
-            try {
-              return mapFirestoreTicket(doc);
-            } catch (error) {
-              console.error('Error mapping ticket document:', error, doc.id);
-              return null;
-            }
-          }).filter(ticket => ticket !== null) as Ticket[];
-          
-          callback(tickets);
-        } catch (error) {
-          console.error('Error processing tickets snapshot:', error);
-          callback([]);
-        }
-      }, (error) => {
-        console.error('Error in subscribeToUserTickets:', error);
-        callback([]);
-      });
-    }).catch(error => {
-      console.error('Error getting current user or tickets collection:', error);
+    const user = getCurrentUser();
+    if (!user) {
       callback([]);
       return () => {};
-    });
+    }
     
-    // Devolver una función de unsubscribe temporal
-    return () => {
-      // Esta función será reemplazada cuando se resuelva la promesa
-    };
+    const ticketsQuery = query(
+      collection(db, TICKETS_COLLECTION),
+      where('userId', '==', user.id),
+      orderBy('timestamp', 'desc')
+    );
+    
+    return onSnapshot(ticketsQuery, (snapshot) => {
+      try {
+        const tickets = snapshot.docs.map(doc => {
+          try {
+            return mapFirestoreTicket(doc);
+          } catch (error) {
+            console.error('Error mapping ticket document:', error, doc.id);
+            return null;
+          }
+        }).filter(ticket => ticket !== null) as Ticket[];
+        
+        callback(tickets);
+      } catch (error) {
+        console.error('Error processing tickets snapshot:', error);
+        callback([]);
+      }
+    }, (error) => {
+      console.error('Error in subscribeToUserTickets:', error);
+      callback([]);
+    });
   } catch (error) {
     console.error('Error setting up user tickets subscription:', error);
-    callback([]);
     return () => {}; // Unsubscribe no-op
   }
 };

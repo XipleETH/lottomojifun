@@ -13,9 +13,8 @@
     "splashBackgroundColor": "#8B5CF6",
     "homeUrl": "https://lottomojifun.vercel.app",
     "webhookUrl": "https://lottomojifun.vercel.app/api/webhook",
-    "subtitle": "Match emojis to win! Exclusive for Farcaster users",
-    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck! Only available for Farcaster Warpcast users.",
-    "requiresLogin": true,
+    "subtitle": "Match emojis to win!",
+    "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Generate up to 10 tickets and test your luck!",
     "screenshotUrls": [
       "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
     ],
@@ -25,52 +24,12 @@
       "games",
       "emoji",
       "prizes",
-      "fun",
-      "farcaster",
-      "warpcast",
-      "web3"
+      "fun"
     ],
     "heroImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
-    "tagline": "Match emojis, win prizes! Farcaster exclusive lottery",
-    "ogTitle": "LottoMoji - Emoji Lottery Game for Farcaster",
-    "ogDescription": "Play the exciting emoji-based lottery game exclusively for Farcaster users. Match 4 emojis to win amazing prizes!",
+    "tagline": "Match emojis, win prizes!",
+    "ogTitle": "LottoMoji - Emoji Lottery Game",
+    "ogDescription": "Play the exciting emoji-based lottery game. Match 4 emojis to win amazing prizes!",
     "ogImageUrl": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
-  },
-
-  "miniApp": {
-    "id": "MD6NcmUnNhly",
-    "autoSignIn": true,
-    "autoConnect": true, 
-    "requiresWallet": true,
-    "walletPermissions": ["read", "sign", "transaction"],
-    "appType": "game",
-    "supportUrl": "https://lottomojifun.vercel.app/help",
-    "notificationTypes": [
-      {
-        "id": "win_notification",
-        "title": "Win Notification",
-        "description": "Get notified when you win a prize"
-      },
-      {
-        "id": "draw_notification",
-        "title": "Draw Notification",
-        "description": "Get notified when a new draw is about to happen"
-      }
-    ],
-    "supportedChains": [10, 8453],
-    "preferredChain": 10,
-    "connectMessage": "Conectando con tu cuenta de Warpcast...",
-    "walletConnectProjectId": "${process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID}"
-  },
-  
-  "permissions": {
-    "isFrameRequired": true,
-    "fcauth": {
-      "domain": "lottomojifun.vercel.app",
-      "siweUri": "https://lottomojifun.vercel.app"
-    },
-    "wallet": {
-      "chains": [10, 8453]
-    }
   }
 } 

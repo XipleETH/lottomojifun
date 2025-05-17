@@ -36,7 +36,7 @@ const db = getFirestore();
 
 // Constantes
 const GAME_STATE_DOC = 'current_game_state';
-const DEFAULT_TICKETS_COLLECTION = 'player_tickets'; // Cambiado a nueva colección por defecto
+const TICKETS_COLLECTION = 'tickets';
 const GAME_RESULTS_COLLECTION = 'game_results';
 const DRAW_INTERVAL_MS = 60000; // 1 minuto
 
@@ -114,23 +114,6 @@ const processGameDraw = async () => {
   
   try {
     logger.info(`[${processId}] Procesando sorteo del juego para el minuto ${currentMinute}...`);
-    
-    // Obtener el nombre de la colección de tickets activa
-    let ticketsCollection = DEFAULT_TICKETS_COLLECTION;
-    try {
-      const gameStateDoc = await db.collection('game_state').doc(GAME_STATE_DOC).get();
-      if (gameStateDoc.exists) {
-        const gameStateData = gameStateDoc.data();
-        if (gameStateData && gameStateData.ticketsCollection) {
-          ticketsCollection = gameStateData.ticketsCollection;
-          logger.info(`[${processId}] Usando colección de tickets configurada: ${ticketsCollection}`);
-        } else {
-          logger.info(`[${processId}] No se encontró configuración de colección de tickets, usando valor por defecto: ${DEFAULT_TICKETS_COLLECTION}`);
-        }
-      }
-    } catch (error) {
-      logger.error(`[${processId}] Error obteniendo configuración de colección de tickets, usando valor por defecto: ${DEFAULT_TICKETS_COLLECTION}`, error);
-    }
     
     // 1. Verificar primero si ya existe un resultado en game_results para este minuto
     // (verificación adicional para evitar duplicados)
@@ -240,13 +223,13 @@ const processGameDraw = async () => {
     });
     
     // 6. Obtener tickets activos
-    const ticketsSnapshot = await db.collection(ticketsCollection).get();
+    const ticketsSnapshot = await db.collection(TICKETS_COLLECTION).get();
     const tickets = ticketsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
     
-    logger.info(`[${processId}] Procesando ${tickets.length} tickets de la colección ${ticketsCollection}`);
+    logger.info(`[${processId}] Procesando ${tickets.length} tickets`);
     
     // 7. Comprobar ganadores con los nuevos criterios
     const results = {
@@ -319,7 +302,7 @@ const processGameDraw = async () => {
         // Generar un nuevo ticket gratis con números aleatorios
         const freeTicketNumbers = generateRandomEmojis(4);
         
-        await db.collection(ticketsCollection).add({
+        await db.collection(TICKETS_COLLECTION).add({
           numbers: freeTicketNumbers,
           timestamp: FieldValue.serverTimestamp(),
           userId: ticket.userId,
@@ -327,7 +310,7 @@ const processGameDraw = async () => {
           wonFrom: ticket.id
         });
         
-        logger.info(`[${processId}] Ticket gratis generado para usuario ${ticket.userId} en colección ${ticketsCollection}`);
+        logger.info(`[${processId}] Ticket gratis generado para usuario ${ticket.userId}`);
       }
     }
     

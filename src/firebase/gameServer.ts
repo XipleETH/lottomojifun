@@ -19,23 +19,9 @@ import { Ticket, GameResult } from '../types';
 
 // Constantes
 const GAME_STATE_DOC = 'current_game_state';
-const DEFAULT_TICKETS_COLLECTION = 'player_tickets'; // Actualizado a nueva colección
+const TICKETS_COLLECTION = 'tickets';
 const GAME_RESULTS_COLLECTION = 'game_results';
 const DRAW_INTERVAL_MS = 60000; // 1 minuto
-
-// Función para obtener el nombre de la colección de tickets activa
-export const getTicketsCollectionName = async (): Promise<string> => {
-  try {
-    const stateDoc = await getDoc(doc(db, 'game_state', GAME_STATE_DOC));
-    const data = stateDoc.data();
-    
-    // Usar la colección especificada en el estado del juego o la predeterminada
-    return data?.ticketsCollection || DEFAULT_TICKETS_COLLECTION;
-  } catch (error) {
-    console.error('Error obteniendo nombre de colección de tickets:', error);
-    return DEFAULT_TICKETS_COLLECTION;
-  }
-};
 
 // Función para solicitar un sorteo manual (solo para uso administrativo)
 export const requestManualGameDraw = async (): Promise<boolean> => {
@@ -120,36 +106,17 @@ export const initializeGameState = async (): Promise<void> => {
     const stateDoc = await getDoc(stateDocRef);
     
     if (stateDoc.exists()) {
-      const data = stateDoc.data();
-      console.log('[initializeGameState] El estado del juego ya existe');
+      console.log('[initializeGameState] El estado del juego ya existe, no se realizará ninguna acción');
       
-      // Verificar si existe la referencia a la colección de tickets
-      if (!data.ticketsCollection) {
-        console.log('[initializeGameState] Actualizando documento con la colección de tickets predeterminada');
-        await setDoc(stateDocRef, {
-          ticketsCollection: DEFAULT_TICKETS_COLLECTION
-        }, { merge: true });
-      } else {
-        console.log(`[initializeGameState] Colección de tickets configurada: ${data.ticketsCollection}`);
-      }
-      
+      // Si hay un documento existente, lo respetamos y no hacemos nada
+      // De esta forma solo Firebase Functions actualizará el estado
       return;
     }
     
-    console.log('[initializeGameState] No existe estado del juego, creando con la nueva colección de tickets...');
+    console.log('[initializeGameState] No existe estado del juego, solicitando un sorteo inmediato...');
     
-    // Crear un estado de juego inicial con la nueva colección de tickets
-    await setDoc(stateDocRef, {
-      winningNumbers: [],
-      nextDrawTime: new Date(Date.now() + 60000), // Próximo sorteo en 1 minuto
-      lastUpdated: new Date(),
-      ticketsCollection: DEFAULT_TICKETS_COLLECTION,
-      source: 'client-init'
-    });
-    
-    console.log('[initializeGameState] Estado inicial del juego creado con la colección de tickets actualizada');
-    
-    // Solicitar un sorteo inmediato a Firebase Functions para generar los números ganadores
+    // Si no existe documento, solicitar un sorteo inmediato a Firebase Functions
+    // para que sea el servidor el que genere los números ganadores oficiales
     try {
       await requestManualGameDraw();
       console.log('[initializeGameState] Solicitud de sorteo enviada a Firebase Functions');

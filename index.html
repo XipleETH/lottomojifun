@@ -2,86 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LottoMoji - Lottery Game for Farcaster</title>
-    <meta name="description" content="A fun emoji-based lottery game where you match 4 emojis to win prizes. Exclusive for Farcaster users." />
-    <meta property="og:title" content="LottoMoji - Emoji Lottery Game for Farcaster" />
-    <meta property="og:description" content="Play the exciting emoji-based lottery game exclusively for Farcaster users. Match 4 emojis to win amazing prizes!" />
-    <meta property="og:image" content="https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm" />
-    <meta property="og:url" content="https://lottomojifun.vercel.app" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <title>Vite + React + TS</title>
     <meta name="fc:frame" content='{
-      "version":"1",
-      "image":"https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
-      "buttons":[
-        {
-          "label":"Jugar LottoMoji",
-          "action":"post_redirect"
+      "version":"next",
+      "imageUrl":"https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
+      "button":{
+        "title":"Play",
+        "action":{
+          "type":"launch_frame",
+          "url":"https://lottomojifun.vercel.app",
+          "name":"Lottomoji",
+          "splashImageUrl":"https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
+          "splashBackgroundColor":"#f5f0ec"
         }
-      ],
-      "post_url":"https://lottomojifun.vercel.app/api/frames"
+      }
     }' />
-    <!-- Scripts para Farcaster -->
-    <script src="/farcaster-detector.js"></script>
-    <script src="/farcaster-frames.js"></script>
-    <script async src="https://warpcast.com/js/frames.js"></script>
-    <script async src="https://warpcast.com/js/embed.js"></script>
-    <script>
-      // Configuración global para Farcaster
-      window.farcasterConfig = {
-        appId: "MD6NcmUnNhly",
-        hubUrl: "https://hub.warpcast.com", 
-        domain: "lottomojifun.vercel.app"
-      };
-      
-      // Detector de SDK mejorado
-      window.addEventListener('load', function() {
-        console.log('Inicializando detección de SDK de Farcaster...');
-        
-        // Verificar múltiples ubicaciones del SDK
-        const checkSDK = () => {
-          const potentialSDKs = [
-            window.frames?.sdk,
-            window.Farcaster?.sdk,
-            window.fc_sdk,
-            window.fc_frame?.sdk,
-            window._farcaster?.sdk,
-            window.fcFrame?.sdk,
-            window.frameSDK,
-            window.ethereum?.isFarcaster && window.ethereum
-          ];
-          
-          for (const sdk of potentialSDKs) {
-            if (sdk) {
-              window.Farcaster = window.Farcaster || {};
-              window.Farcaster.sdk = sdk;
-              console.log('SDK de Farcaster encontrado y configurado:', sdk);
-              return true;
-            }
-          }
-          
-          return false;
-        };
-        
-        // Verificar inmediatamente
-        if (!checkSDK()) {
-          // Si no se encuentra, intentar nuevamente después de un tiempo
-          console.log('SDK no encontrado inmediatamente, programando reintentos...');
-          
-          let attempts = 0;
-          const interval = setInterval(() => {
-            attempts++;
-            console.log(`Intento ${attempts} de detectar SDK...`);
-            
-            if (checkSDK() || attempts > 10) {
-              clearInterval(interval);
-              console.log(checkSDK() ? 'SDK encontrado después de reintentos' : 'No se pudo encontrar el SDK');
-            }
-          }, 500);
-        }
-      });
-    </script>
   </head>
   <body>
     <div id="root"></div>
