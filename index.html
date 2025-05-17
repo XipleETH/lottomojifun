@@ -25,6 +25,16 @@
         }
       }
     }' />
+    <script src="/farcaster-detector.js"></script>
+    <script async src="https://warpcast.com/js/frames.js"></script>
+    <script>
+      window.addEventListener('load', function() {
+        if (window.frames && window.frames.sdk) {
+          window.Farcaster = { sdk: window.frames.sdk };
+          console.log('SDK de Farcaster cargado desde frames.js');
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

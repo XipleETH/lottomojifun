@@ -1,0 +1,17 @@
+{
+  "miniAppId": "MD6NcmUnNhly",
+  "name": "LottoMoji",
+  "description": "A fun emoji-based lottery game where you match 4 emojis to win prizes. Exclusive for Farcaster users.",
+  "images": {
+    "icon": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm",
+    "cover": "https://amber-biological-pig-327.mypinata.cloud/ipfs/bafybeih623a6ybhlr3lxzjyknyjmqmgsixaktgblraw2vi2ispimgpfshm"
+  },
+  "requirements": {
+    "needLogin": true,
+    "needFrame": true
+  },
+  "frames": {
+    "version": "1",
+    "autoSignIn": true
+  }
+} 
