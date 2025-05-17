@@ -5,7 +5,6 @@ import { TicketGenerator } from './components/TicketGenerator';
 import { GameHistoryButton } from './components/GameHistoryButton';
 import { EmojiChat } from './components/chat/EmojiChat';
 import { WalletConnect } from './components/WalletConnect';
-import { WalletTransactions } from './components/WalletTransactions';
 import { Trophy, UserCircle, Zap, Terminal } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { useMiniKit, useNotification, useViewProfile } from '@coinbase/onchainkit/minikit';
@@ -21,7 +20,6 @@ function App() {
   const sendNotification = useNotification();
   const viewProfile = useViewProfile();
   const { user, isLoading } = useAuth();
-  const { isConnected } = useWallet();
   const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   // Inicializar Firebase y SDK
@@ -130,13 +128,6 @@ function App() {
             />
           ))}
         </div>
-        
-        {isConnected && (
-          <div className="mt-8">
-            <h2 className="text-2xl text-white font-bold mb-4">Mi Billetera Base</h2>
-            <WalletTransactions />
-          </div>
-        )}
       </div>
       <GameHistoryButton />
       <EmojiChat />
