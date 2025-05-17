@@ -1,34 +1,40 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Chat messages
-    match /chat_messages/{messageId} {
-      allow read: if true;
-      allow create: if request.auth != null;
+    // Regla global para permitir todas las operaciones temporalmente
+    match /{document=**} {
+      allow read, write: if true;
     }
+    
+    // Reglas específicas (comentadas por ahora)
+    // Chat messages
+    // match /chat_messages/{messageId} {
+    //   allow read: if true;
+    //   allow create: if request.auth != null;
+    // }
     
     // Game results
-    match /game_results/{resultId} {
-      allow read: if true;
-      allow write: if true; // Permitir escritura para facilitar pruebas
-    }
+    // match /game_results/{resultId} {
+    //   allow read: if true;
+    //   allow write: if true;
+    // }
     
     // Tickets 
-    match /tickets/{ticketId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
+    // match /tickets/{ticketId} {
+    //   allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+    //   allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    // }
     
-    // Nueva colección de tickets - regla actualizada para permitir cualquier usuario autenticado
-    match /player_tickets/{ticketId} {
-      allow read: if true; // Permitir lectura para todos
-      allow write: if true; // Permitir escritura para todos durante pruebas
-    }
+    // Nueva colección de tickets
+    // match /player_tickets/{ticketId} {
+    //   allow read: if true;
+    //   allow write: if true;
+    // }
     
     // Game state
-    match /game_state/{document} {
-      allow read: if true;
-      allow write: if true; // Permitir escritura para facilitar pruebas
-    }
+    // match /game_state/{document} {
+    //   allow read: if true;
+    //   allow write: if true;
+    // }
   }
 }
